@@ -182,6 +182,20 @@ var _ = Describe("Shamir Secret Sharing", func() {
 	})
 })
 
+func BenchmarkShare(b *testing.B) {
+	n := 100
+	k := 33
+
+	indices := sequentialIndices(n)
+	sharer := NewSharer(indices)
+	secret := secp256k1.RandomSecp256k1N()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = sharer.Share(secret, k)
+	}
+}
+
 func BenchmarkOpen(b *testing.B) {
 	n := 100
 	k := 33
