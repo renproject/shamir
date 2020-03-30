@@ -1,0 +1,5 @@
+goos: linux
+goarch: amd64
+BenchmarkOpen-12    	    2917	    432228 ns/op
+PASS
+ok  	_/home/ross/documents/development/go/shamir	1.815s
