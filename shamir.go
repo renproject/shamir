@@ -71,11 +71,12 @@ func (sharer *Sharer) Share(secret secp256k1.Secp256k1N, k int) (Shares, error) 
 }
 
 type Reconstructor struct {
-	indices  []secp256k1.Secp256k1N
-	fullProd []secp256k1.Secp256k1N
-	indInv   []secp256k1.Secp256k1N
-	indInts  []int
-	seen     []bool
+	indices    []secp256k1.Secp256k1N
+	fullProd   []secp256k1.Secp256k1N
+	indInv     []secp256k1.Secp256k1N
+	indInts    []int
+	seen       []bool
+	complement []int
 }
 
 func NewReconstructor(indices []secp256k1.Secp256k1N) Reconstructor {
@@ -83,6 +84,7 @@ func NewReconstructor(indices []secp256k1.Secp256k1N) Reconstructor {
 	indInv := make([]secp256k1.Secp256k1N, len(indices))
 	indInts := make([]int, len(indices))
 	seen := make([]bool, len(indices))
+	complement := make([]int, len(indices))
 
 	var neg, inv secp256k1.Secp256k1N
 	for i := range indices {
@@ -105,7 +107,7 @@ func NewReconstructor(indices []secp256k1.Secp256k1N) Reconstructor {
 		indInv[i].Inv(&ind)
 	}
 
-	return Reconstructor{indices, fullProd, indInv, indInts, seen}
+	return Reconstructor{indices, fullProd, indInv, indInts, seen, complement}
 }
 
 func (r *Reconstructor) Open(shares Shares) (secp256k1.Secp256k1N, error) {
@@ -153,28 +155,28 @@ OUTER:
 		r.seen[ind] = true
 	}
 
-	complement := make([]int, len(r.indices))
-	for i := range complement {
-		complement[i] = 1
+	r.complement = r.complement[:cap(r.complement)]
+	for i := range r.complement {
+		r.complement[i] = 1
 	}
 
 	// Get the corresponding indices for the given shares
 	for _, ind := range r.indInts {
-		complement[ind] = 0
+		r.complement[ind] = 0
 	}
 	var toggle int
 	for i, j := 0, 0; i < len(r.indices); i++ {
-		toggle = complement[i]
-		complement[j] = toggle * i
+		toggle = r.complement[i]
+		r.complement[j] = toggle * i
 		j += toggle
 	}
-	complement = complement[:len(r.indices)-len(shares)]
+	r.complement = r.complement[:len(r.indices)-len(shares)]
 
 	var term, diff secp256k1.Secp256k1N
 	for i, share := range shares {
 		term = share.Value()
 		term.Mul(&term, &r.fullProd[r.indInts[i]])
-		for _, j := range complement {
+		for _, j := range r.complement {
 			diff.Neg(&r.indices[r.indInts[i]], 1)
 			diff.Add(&r.indices[j], &diff)
 			term.Mul(&term, &diff)
