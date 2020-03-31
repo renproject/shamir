@@ -22,6 +22,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			var k int
 
 			indices := sequentialIndices(n)
+			shares := make(Shares, n)
 			sharer := NewSharer(indices)
 			reconstructor := NewReconstructor(indices)
 
@@ -29,7 +30,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			for i := 0; i < trials; i++ {
 				k = rand.Intn(n) + 1
 				secret = secp256k1.RandomSecp256k1N()
-				shares, err := sharer.Share(secret, k)
+				err := sharer.Share(shares, secret, k)
 				Expect(err).ToNot(HaveOccurred())
 				shuffle(shares)
 				recons, err := reconstructor.Open(shares[:k+rand.Intn(n-k+1)])
@@ -47,12 +48,13 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			var k int
 
 			indices := sequentialIndices(n)
+			shares := make(Shares, n)
 			sharer := NewSharer(indices)
 
 			for i := 0; i < trials; i++ {
 				k = rand.Intn(n) + 1
 				secret := secp256k1.RandomSecp256k1N()
-				shares, err := sharer.Share(secret, k)
+				err := sharer.Share(shares, secret, k)
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(n))
@@ -69,15 +71,30 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			maxK := 100
 
 			indices := sequentialIndices(n)
+			shares := make(Shares, n)
 			sharer := NewSharer(indices)
 
 			for i := 0; i < trials; i++ {
 				k := rand.Intn(maxK-n) + n + 1
 				secret := secp256k1.RandomSecp256k1N()
-				shares, err := sharer.Share(secret, k)
+				err := sharer.Share(shares, secret, k)
 
-				Expect(shares).To(BeNil())
 				Expect(err).To(HaveOccurred())
+			}
+		})
+
+		It("should panic if the destination slice capacity is too small", func() {
+			trials := 100
+			n := 20
+
+			indices := sequentialIndices(n)
+			sharer := NewSharer(indices)
+
+			for i := 0; i < trials; i++ {
+				k := rand.Intn(n) + 1
+				secret := secp256k1.RandomSecp256k1N()
+				shares := make(Shares, rand.Intn(n))
+				Expect(func() { sharer.Share(shares, secret, k) }).Should(Panic())
 			}
 		})
 	})
@@ -216,12 +233,13 @@ func BenchmarkShare(b *testing.B) {
 	k := 33
 
 	indices := sequentialIndices(n)
+	shares := make(Shares, n)
 	sharer := NewSharer(indices)
 	secret := secp256k1.RandomSecp256k1N()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = sharer.Share(secret, k)
+		_ = sharer.Share(shares, secret, k)
 	}
 }
 
@@ -230,10 +248,11 @@ func BenchmarkOpen(b *testing.B) {
 	k := 33
 
 	indices := sequentialIndices(n)
+	shares := make(Shares, n)
 	sharer := NewSharer(indices)
 	reconstructor := NewReconstructor(indices)
 	secret := secp256k1.RandomSecp256k1N()
-	shares, _ := sharer.Share(secret, k)
+	_ = sharer.Share(shares, secret, k)
 	shuffle(shares)
 
 	b.ResetTimer()

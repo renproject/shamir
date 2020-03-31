@@ -50,12 +50,16 @@ func NewSharer(indices []secp256k1.Secp256k1N) Sharer {
 	return Sharer{indices, coeffs}
 }
 
-// Share creates Shamir shares for the given secret at the given threshold. In
-// the returned Shares, there will be one share for each index in the indices
-// that were used to construct the Sharer.
-func (sharer *Sharer) Share(secret secp256k1.Secp256k1N, k int) (Shares, error) {
+// Share creates Shamir shares for the given secret at the given threshold, and
+// stores them in the given destination slice. In the returned Shares, there
+// will be one share for each index in the indices that were used to construct
+// the Sharer.
+//
+// Panics: This function will panic if the destination shares slice has a
+// capacity less than n (the number of indices).
+func (sharer *Sharer) Share(shares Shares, secret secp256k1.Secp256k1N, k int) error {
 	if k > len(sharer.indices) {
-		return nil, fmt.Errorf(
+		return fmt.Errorf(
 			"reconstruction threshold too large: expected k <= %v, got k = %v",
 			len(sharer.indices), k,
 		)
@@ -68,8 +72,8 @@ func (sharer *Sharer) Share(secret secp256k1.Secp256k1N, k int) (Shares, error) 
 		sharer.coeffs[i] = secp256k1.RandomSecp256k1N()
 	}
 
-	// Crate shares
-	shares := make(Shares, len(sharer.indices))
+	// Set shares
+	shares = shares[:len(sharer.indices)]
 	var eval secp256k1.Secp256k1N
 	for i, ind := range sharer.indices {
 		eval.Set(&sharer.coeffs[k-1])
@@ -81,7 +85,7 @@ func (sharer *Sharer) Share(secret secp256k1.Secp256k1N, k int) (Shares, error) 
 		shares[i] = NewShare(ind, eval)
 	}
 
-	return shares, nil
+	return nil
 }
 
 // A Reconstructor is responsible for reconstructing shares into their
