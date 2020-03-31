@@ -33,12 +33,12 @@ func (c *Commitment) Scale(scale secp256k1.Secp256k1N) {
 
 func (c *Commitment) IsValid(share *Share) bool {
 	var bs [32]byte
-	index := share.Value()
-	index.GetB32(bs[:])
+	value := share.Value()
+	value.GetB32(bs[:])
 	shareComm := curvePoint{}
 
 	shareComm.baseExp(bs)
-	eval := c.evaluate(index)
+	eval := c.evaluate(share.Index())
 	return shareComm.eq(&eval)
 }
 
