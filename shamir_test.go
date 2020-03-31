@@ -180,6 +180,35 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			}
 		})
 	})
+
+	Context("when doing a checked reconstruction of a secret from shares", func() {
+		It("should give an error if there are not enough shares, and no error otherwise", func() {
+			trials := 100
+			n := 20
+			var k, lowK, highK int
+
+			indices := sequentialIndices(n)
+			reconstructor := NewReconstructor(indices)
+			shares := make(Shares, n)
+			zero := secp256k1.ZeroSecp256k1N()
+
+			for i := range shares {
+				shares[i] = NewShare(indices[i], zero)
+			}
+
+			for i := 0; i < trials; i++ {
+				k = rand.Intn(n) + 1
+				lowK = rand.Intn(k)
+				highK = rand.Intn(n-k+1) + k
+
+				_, err := reconstructor.CheckedOpen(shares[:lowK], k)
+				Expect(err).To(HaveOccurred())
+
+				_, err = reconstructor.CheckedOpen(shares[:highK], k)
+				Expect(err).ToNot(HaveOccurred())
+			}
+		})
+	})
 })
 
 func BenchmarkShare(b *testing.B) {
