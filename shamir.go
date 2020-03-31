@@ -57,7 +57,7 @@ func NewSharer(indices []secp256k1.Secp256k1N) Sharer {
 //
 // Panics: This function will panic if the destination shares slice has a
 // capacity less than n (the number of indices).
-func (sharer *Sharer) Share(shares Shares, secret secp256k1.Secp256k1N, k int) error {
+func (sharer *Sharer) Share(shares *Shares, secret secp256k1.Secp256k1N, k int) error {
 	if k > len(sharer.indices) {
 		return fmt.Errorf(
 			"reconstruction threshold too large: expected k <= %v, got k = %v",
@@ -73,7 +73,7 @@ func (sharer *Sharer) Share(shares Shares, secret secp256k1.Secp256k1N, k int) e
 	}
 
 	// Set shares
-	shares = shares[:len(sharer.indices)]
+	*shares = (*shares)[:len(sharer.indices)]
 	var eval secp256k1.Secp256k1N
 	for i, ind := range sharer.indices {
 		eval.Set(&sharer.coeffs[k-1])
@@ -82,7 +82,7 @@ func (sharer *Sharer) Share(shares Shares, secret secp256k1.Secp256k1N, k int) e
 			eval.Add(&eval, &sharer.coeffs[j])
 		}
 		eval.Normalize()
-		shares[i] = NewShare(ind, eval)
+		(*shares)[i] = NewShare(ind, eval)
 	}
 
 	return nil

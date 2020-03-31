@@ -30,7 +30,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			for i := 0; i < trials; i++ {
 				k = rand.Intn(n) + 1
 				secret = secp256k1.RandomSecp256k1N()
-				err := sharer.Share(shares, secret, k)
+				err := sharer.Share(&shares, secret, k)
 				Expect(err).ToNot(HaveOccurred())
 				shuffle(shares)
 				recons, err := reconstructor.Open(shares[:k+rand.Intn(n-k+1)])
@@ -54,7 +54,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			for i := 0; i < trials; i++ {
 				k = rand.Intn(n) + 1
 				secret := secp256k1.RandomSecp256k1N()
-				err := sharer.Share(shares, secret, k)
+				err := sharer.Share(&shares, secret, k)
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(n))
@@ -77,7 +77,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			for i := 0; i < trials; i++ {
 				k := rand.Intn(maxK-n) + n + 1
 				secret := secp256k1.RandomSecp256k1N()
-				err := sharer.Share(shares, secret, k)
+				err := sharer.Share(&shares, secret, k)
 
 				Expect(err).To(HaveOccurred())
 			}
@@ -94,7 +94,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 				k := rand.Intn(n) + 1
 				secret := secp256k1.RandomSecp256k1N()
 				shares := make(Shares, rand.Intn(n))
-				Expect(func() { sharer.Share(shares, secret, k) }).Should(Panic())
+				Expect(func() { sharer.Share(&shares, secret, k) }).Should(Panic())
 			}
 		})
 	})
@@ -239,7 +239,7 @@ func BenchmarkShare(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = sharer.Share(shares, secret, k)
+		_ = sharer.Share(&shares, secret, k)
 	}
 }
 
@@ -252,7 +252,7 @@ func BenchmarkOpen(b *testing.B) {
 	sharer := NewSharer(indices)
 	reconstructor := NewReconstructor(indices)
 	secret := secp256k1.RandomSecp256k1N()
-	_ = sharer.Share(shares, secret, k)
+	_ = sharer.Share(&shares, secret, k)
 	shuffle(shares)
 
 	b.ResetTimer()
