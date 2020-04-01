@@ -8,32 +8,56 @@ import (
 	"github.com/renproject/secp256k1-go"
 )
 
+// A Commitment is used to verify that a sharing has been performed correctly.
 type Commitment struct {
 	// Curve points that represent commitments to each of the coefficients.
 	// Index i corresponds to coefficient c_i.
 	points []curvePoint
 }
 
-func NewCommitmentWithCapacity(c int) Commitment {
-	points := make([]curvePoint, c)
+// NewCommitmentWithCapacity creates a new Commitment with the given capacity.
+// This capacity represents the maximum reconstruction threshold, k, that this
+// commitment can be used for.
+func NewCommitmentWithCapacity(k int) Commitment {
+	points := make([]curvePoint, k)
 	return Commitment{points}
 }
 
+// Add takes two input commitments and stores in the caller the commitment that
+// represents the addition of these two commitments. That is, the new
+// commitment can be used to verify the correctness of the sharing defined by
+// adding the two corresponding sharings for the input commitments. For
+// example, if `a_i` is a valid share for the commitment `a`, and `b_i` is a
+// valid share for the commitment `b`, then `a_i + b_i` will be a valid share
+// for the newly constructed commitment.
+//
+// Panics: If the destination commitment does not have capacity at least as big
+// as the greater of the capacities of the two inputs, then this function will
+// panic.
 func (c *Commitment) Add(a, b *Commitment) {
-	if len(a.points) != len(b.points) {
-		panic(fmt.Sprintf(
-			"cannot add commitments of different lengths: lhs has k = %v, rhs has k = %v",
-			len(a.points),
-			len(b.points),
-		))
+	var smaller, larger []curvePoint
+	if len(a.points) > len(b.points) {
+		smaller, larger = b.points, a.points
+	} else {
+		smaller, larger = a.points, b.points
 	}
 
-	c.points = c.points[:len(a.points)]
-	for i := range c.points {
-		c.points[i].add(&a.points[i], &b.points[i])
+	c.points = c.points[:len(larger)]
+	for i := range smaller {
+		c.points[i].add(&smaller[i], &larger[i])
 	}
+	copy(c.points[len(smaller):], larger[len(smaller):])
 }
 
+// Scale takes an input commitment and stores in the caller the commitment that
+// represents the scaled input commitment. That is, the new commitment can be
+// used to verify the correctness of the sharing defined by scaling the
+// original sharing. For example, if `a_i` is a valid share for the commitment
+// `other`, then `scale * a_i` will be a valid sharing for the newly
+// constructed commitment.
+//
+// Panics: If the destination commitment does not have capacity at least as big
+// as the input commitment, then this function will panic.
 func (c *Commitment) Scale(other *Commitment, scale *secp256k1.Secp256k1N) {
 	c.points = c.points[:len(other.points)]
 	for i := range c.points {
@@ -41,6 +65,8 @@ func (c *Commitment) Scale(other *Commitment, scale *secp256k1.Secp256k1N) {
 	}
 }
 
+// IsValid returns true if the given share is correct with respect to the
+// commitment, and false otherwise,
 func (c *Commitment) IsValid(share *Share) bool {
 	var bs [32]byte
 	value := share.Value()
@@ -64,15 +90,27 @@ func (c *Commitment) evaluate(index secp256k1.Secp256k1N) curvePoint {
 	return eval
 }
 
+// A VSSharer is capable of creating a verifiable sharing of a secret, which is
+// just a normal Shamir sharing but with the addition of a commitment which is
+// a collection of commitments to each of the coefficients of the sharing.
 type VSSharer struct {
 	sharer Sharer
 }
 
+// NewVSSharer constructs a new VSSharer from the given set of indices.
 func NewVSSharer(indices []secp256k1.Secp256k1N) VSSharer {
 	sharer := NewSharer(indices)
 	return VSSharer{sharer}
 }
 
+// Share creates verifiable Shamir shares for the given secret at the given
+// threshold, and stores the shares and the commitment in the given
+// destinations. In the returned Shares, there will be one share for each index
+// in the indices that were used to construct the Sharer.
+//
+// Panics: This function will panic if the destination shares slice has a
+// capacity less than n (the number of indices), or if the destination
+// commitment has a capacity less than k.
 func (s *VSSharer) Share(shares *Shares, c *Commitment, secret secp256k1.Secp256k1N, k int) error {
 	err := s.sharer.Share(shares, secret, k)
 	if err != nil {

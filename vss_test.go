@@ -64,7 +64,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		})
 	})
 
-	FContext("when constructing a new sharing by combining or modifying other sharings", func() {
+	Context("when constructing a new sharing by combining or modifying other sharings", func() {
 		Context("when adding two commitments together", func() {
 			Specify("the resulting commitment should correspond to the addition of the shares", func() {
 				trials := 20
