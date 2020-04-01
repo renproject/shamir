@@ -19,15 +19,25 @@ func NewCommitmentWithCapacity(c int) Commitment {
 	return Commitment{points}
 }
 
-func (c *Commitment) Add(other *Commitment) {
-	for i, p := range c.points {
-		p.add(&p, &other.points[i])
+func (c *Commitment) Add(a, b *Commitment) {
+	if len(a.points) != len(b.points) {
+		panic(fmt.Sprintf(
+			"cannot add commitments of different lengths: lhs has k = %v, rhs has k = %v",
+			len(a.points),
+			len(b.points),
+		))
+	}
+
+	c.points = c.points[:len(a.points)]
+	for i := range c.points {
+		c.points[i].add(&a.points[i], &b.points[i])
 	}
 }
 
-func (c *Commitment) Scale(scale secp256k1.Secp256k1N) {
-	for _, p := range c.points {
-		p.scale(&p, &scale)
+func (c *Commitment) Scale(other *Commitment, scale *secp256k1.Secp256k1N) {
+	c.points = c.points[:len(other.points)]
+	for i := range c.points {
+		c.points[i].scale(&other.points[i], scale)
 	}
 }
 
@@ -85,13 +95,13 @@ type curvePoint struct {
 	x, y *big.Int
 }
 
-func (c *curvePoint) set(other *curvePoint) {
-	c.x.Set(other.x)
-	c.y.Set(other.y)
+func (p *curvePoint) set(other *curvePoint) {
+	p.x.Set(other.x)
+	p.y.Set(other.y)
 }
 
-func (c curvePoint) String() string {
-	return fmt.Sprintf("(%v, %v)", c.x, c.y)
+func (p curvePoint) String() string {
+	return fmt.Sprintf("(%v, %v)", p.x, p.y)
 }
 
 func newCurvePoint() curvePoint {
