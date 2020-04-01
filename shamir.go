@@ -36,6 +36,26 @@ func (s *Share) IndexEq(other *secp256k1.Secp256k1N) bool {
 	return s.index.Eq(other)
 }
 
+func (s *Share) Add(a, b *Share) {
+	if !a.index.Eq(&b.index) {
+		panic(fmt.Sprintf(
+			"cannot add shares with different indices: lhs has index %v and rhs has index %v",
+			a.index,
+			b.index,
+		))
+	}
+
+	s.index = a.index
+	s.value.Add(&a.value, &b.value)
+	s.value.Normalize()
+}
+
+func (s *Share) Scale(other *Share, scale *secp256k1.Secp256k1N) {
+	s.index = other.index
+	s.value.Mul(&other.value, scale)
+	s.value.Normalize()
+}
+
 // A Sharer is responsible for creating Shamir sharings of secrets. A Sharer
 // instance is bound to a specific set of indices; it can only create sharings
 // of a secret for the set of players defined by these indices.
