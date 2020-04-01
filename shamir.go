@@ -36,6 +36,35 @@ func (s *Share) IndexEq(other *secp256k1.Secp256k1N) bool {
 	return s.index.Eq(other)
 }
 
+// Add computes the addition of the two input shares and stores the result in
+// the caller. Addition is defined by adding the values but leaving the index
+// unchanged.
+//
+// Panics: Addition only makes sense when the two input shares have the same
+// index. If they do not, this functino wil panic.
+func (s *Share) Add(a, b *Share) {
+	if !a.index.Eq(&b.index) {
+		panic(fmt.Sprintf(
+			"cannot add shares with different indices: lhs has index %v and rhs has index %v",
+			a.index,
+			b.index,
+		))
+	}
+
+	s.index = a.index
+	s.value.Add(&a.value, &b.value)
+	s.value.Normalize()
+}
+
+// Scale multiplies the input share by a constant and then stores it in the
+// caller. This is defined as multiplying the share value by the scale, and
+// leaving the index unchanged.
+func (s *Share) Scale(other *Share, scale *secp256k1.Secp256k1N) {
+	s.index = other.index
+	s.value.Mul(&other.value, scale)
+	s.value.Normalize()
+}
+
 // A Sharer is responsible for creating Shamir sharings of secrets. A Sharer
 // instance is bound to a specific set of indices; it can only create sharings
 // of a secret for the set of players defined by these indices.

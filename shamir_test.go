@@ -226,6 +226,59 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			}
 		})
 	})
+
+	Context("when modifying shares", func() {
+		Specify("adding should add the values and leave the index unchanged", func() {
+			trials := 100
+
+			var index, value1, value2, val, ind, sum secp256k1.Secp256k1N
+			var share1, share2, shareSum Share
+
+			for i := 0; i < trials; i++ {
+				index = secp256k1.RandomSecp256k1N()
+				value1 = secp256k1.RandomSecp256k1N()
+				value2 = secp256k1.RandomSecp256k1N()
+				sum.Add(&value1, &value2)
+				sum.Normalize()
+
+				// The resulting share should have the values added and the
+				// same index.
+				share1 = NewShare(index, value1)
+				share2 = NewShare(index, value2)
+				shareSum.Add(&share1, &share2)
+				val = shareSum.Value()
+				ind = shareSum.Index()
+				Expect(val.Eq(&sum)).To(BeTrue())
+				Expect(ind.Eq(&index)).To(BeTrue())
+
+				// Adding two shares with different indices should panic.
+				share1 = NewShare(secp256k1.RandomSecp256k1N(), value1)
+				Expect(func() { shareSum.Add(&share1, &share2) }).To(Panic())
+			}
+		})
+
+		Specify("scaling should multiply the value and leave the index unchanged", func() {
+			trials := 100
+
+			var scale, value, index, val, ind, prod secp256k1.Secp256k1N
+			var share, shareScale Share
+
+			for i := 0; i < trials; i++ {
+				index = secp256k1.RandomSecp256k1N()
+				value = secp256k1.RandomSecp256k1N()
+				prod.Mul(&value, &scale)
+
+				// The resulting share should have the value scaled and the
+				// same index.
+				share = NewShare(index, value)
+				shareScale.Scale(&share, &scale)
+				val = shareScale.Value()
+				ind = shareScale.Index()
+				Expect(val.Eq(&prod)).To(BeTrue())
+				Expect(ind.Eq(&index)).To(BeTrue())
+			}
+		})
+	})
 })
 
 func BenchmarkShare(b *testing.B) {
