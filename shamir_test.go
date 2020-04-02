@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	. "."
+	. "github.com/renproject/shamir"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

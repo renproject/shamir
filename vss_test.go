@@ -4,7 +4,7 @@ import (
 	"math/rand"
 	"testing"
 
-	. "."
+	. "github.com/renproject/shamir"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
