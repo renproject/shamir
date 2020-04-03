@@ -8,59 +8,66 @@ import (
 	"github.com/renproject/secp256k1-go"
 )
 
+// CurvePoint represents a point on the secp256k1 elliptice curve.
 type CurvePoint struct {
 	x, y *big.Int
 }
 
-func (p *CurvePoint) Set(other *CurvePoint) {
-	p.x.Set(other.x)
-	p.y.Set(other.y)
-}
-
+// String implements the Stringer interface.
 func (p CurvePoint) String() string {
 	return fmt.Sprintf("(%v, %v)", p.x, p.y)
 }
 
+// NewCurvePoint constructs a new curve point.
 func NewCurvePoint() CurvePoint {
 	x, y := big.NewInt(0), big.NewInt(0)
 	return CurvePoint{x, y}
 }
 
+// NewCurvePointFromCoords constructs a new curve point from the given x and y
+// coordinates.
+//
+// NOTE: This function does not check that the point is actually on the curve.
 func NewCurvePointFromCoords(x, y *big.Int) CurvePoint {
 	return CurvePoint{x, y}
 }
 
-func (p *CurvePoint) eq(other *CurvePoint) bool {
+// Set sets the calling curve point to be equal to the given curve point.
+func (p *CurvePoint) Set(other *CurvePoint) {
+	p.x.Set(other.x)
+	p.y.Set(other.y)
+}
+
+// Eq returns true if the two curve points are equal, and false otherwise.
+func (p *CurvePoint) Eq(other *CurvePoint) bool {
 	return p.x.Cmp(other.x) == 0 && p.y.Cmp(other.y) == 0
 }
 
+// BaseExp computes the scalar multiplication of the canonical generator of the
+// curve by the scalar represented by the given bytes in big endian format, and
+// stores the result in the caller.
 func (p *CurvePoint) BaseExp(bs [32]byte) {
 	p.x, p.y = ec.S256().ScalarBaseMult(bs[:])
 }
 
-func (p *CurvePoint) exp(base *CurvePoint, bs [32]byte) {
-	p.x, p.y = ec.S256().ScalarMult(base.x, base.y, bs[:])
-}
-
+// Add computes the curve addition of the two given curve points and stores the
+// result in the caller.
 func (p *CurvePoint) Add(a, b *CurvePoint) {
-	if a.eq(b) {
+	if a.Eq(b) {
 		p.x, p.y = ec.S256().Double(a.x, a.y)
 		return
 	}
 	p.x, p.y = ec.S256().Add(a.x, a.y, b.x, b.y)
 }
 
-func (p *CurvePoint) scale(other *CurvePoint, scale *secp256k1.Secp256k1N) {
-	// Short circuit if the index is one
-	if scale.IsOne() {
-		p.x, p.y = other.x, other.y
-	}
-
-	var bs [32]byte
-	scale.GetB32(bs[:])
+// Scale computes the scalar multiplication of the given curve point and the
+// scalar represented by the given bytes in big endian format, and stores the
+// result in the caller.
+func (p *CurvePoint) Scale(other *CurvePoint, bs [32]byte) {
 	p.x, p.y = ec.S256().ScalarMult(other.x, other.y, bs[:])
 }
 
+// RandomCurvePoint returns a random point on the elliptic curve.
 func RandomCurvePoint() CurvePoint {
 	var bs [32]byte
 	r := secp256k1.RandomSecp256k1N()

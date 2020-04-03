@@ -4,33 +4,51 @@ import (
 	"github.com/renproject/secp256k1-go"
 )
 
+// VerifiableShares is a alias for a slice of VerifiableShare(s).
+type VerifiableShares []VerifiableShare
+
+// A VerifiableShare is a Share but with additional information that allows it
+// to be verified as correct for a given commitment to a sharing.
 type VerifiableShare struct {
 	share Share
 	r     secp256k1.Secp256k1N
 }
 
+// NewVerifiableShare constructs a new VerifiableShare from the given Share and
+// decommitment value. This function allows the manual construction of a
+// VerifiableShare, and should be only used if such fine grained control is
+// needed. In general, shares should be constructed by using a VSSharer.
 func NewVerifiableShare(share Share, r secp256k1.Secp256k1N) VerifiableShare {
 	return VerifiableShare{share, r}
 }
 
+// Add computes the addition of the two input shares and stores the result in
+// the caller. This is defined as adding the respective normal (unverifiable)
+// shares and adding the respective decommitment values. In general, the
+// resulting share will be a share with secret value equal to the sum of the
+// two secrets corresponding to the (respective sharings of the) input shares.
 func (vs *VerifiableShare) Add(a, b *VerifiableShare) {
 	vs.share.Add(&a.share, &b.share)
 	vs.r.Add(&a.r, &b.r)
 	vs.r.Normalize()
 }
 
+// Scale computes the scaling of the input share by given scale factor and
+// stores the result in the caller. This is defined as scaling the normal
+// (unverifiable) share by the scaling factor and multiplying the decommitment
+// value also by the scaling factor. In general, the resulting share will be a
+// share with secret value equal to the scale factor multiplied by the secret
+// corresponding to the (sharing of the) input share.
 func (vs *VerifiableShare) Scale(other *VerifiableShare, scale *secp256k1.Secp256k1N) {
 	vs.share.Scale(&other.share, scale)
 	vs.r.Mul(&other.r, scale)
 	vs.r.Normalize()
 }
 
-type VerifiableShares []VerifiableShare
-
 // A Commitment is used to verify that a sharing has been performed correctly.
 type Commitment struct {
-	// Curve points that represent commitments to each of the coefficients.
-	// Index i corresponds to coefficient c_i.
+	// Curve points that represent Pedersen commitments to each of the
+	// coefficients.  Index i corresponds to coefficient c_i.
 	points []CurvePoint
 }
 
@@ -78,21 +96,30 @@ func (c *Commitment) Add(a, b *Commitment) {
 // Panics: If the destination commitment does not have capacity at least as big
 // as the input commitment, then this function will panic.
 func (c *Commitment) Scale(other *Commitment, scale *secp256k1.Secp256k1N) {
+	var bs [32]byte
+	scale.GetB32(bs[:])
 	c.points = c.points[:len(other.points)]
 	for i := range c.points {
-		c.points[i].scale(&other.points[i], scale)
+		c.points[i].Scale(&other.points[i], bs)
 	}
 }
 
+// Evaluates the sharing polynomial at the given index "in the exponent".
 func (c *Commitment) evaluate(eval *CurvePoint, index *secp256k1.Secp256k1N) {
-	// Evaluate the polynomial in the exponent
+	var bs [32]byte
+	index.GetB32(bs[:])
 	eval.Set(&c.points[len(c.points)-1])
 	for i := len(c.points) - 2; i >= 0; i-- {
-		eval.scale(eval, index)
+		eval.Scale(eval, bs)
 		eval.Add(eval, &c.points[i])
 	}
 }
 
+// A VSSChecker is capable of checking that a given share is valid for a given
+// commitment to a sharing. Each instance of this type corresponds to a
+// different group element h for the Pedersen commitment scheme, and as such
+// can by used for any verifiable sharings using this pedersen commitment
+// scheme, but cannot be used for different choices of h once constructed.
 type VSSChecker struct {
 	h CurvePoint
 
@@ -100,21 +127,26 @@ type VSSChecker struct {
 	eval, gPow, hPow CurvePoint
 }
 
+// NewVSSChecker constructs a new VSS checking instance for the given Pedersen
+// commitment scheme parameter h. The other generator g is always chosen to be
+// the canonical base point for the secp256k1 curve.
 func NewVSSChecker(h CurvePoint) VSSChecker {
 	eval, gPow, hPow := NewCurvePoint(), NewCurvePoint(), NewCurvePoint()
 	return VSSChecker{h, eval, gPow, hPow}
 }
 
+// IsValid returns true when the given verifiable share is valid with regard to
+// the given commitment, and false otherwise.
 func (checker *VSSChecker) IsValid(c *Commitment, vshare *VerifiableShare) bool {
 	var bs [32]byte
 	vshare.share.value.GetB32(bs[:])
 	checker.gPow.BaseExp(bs)
 	vshare.r.GetB32(bs[:])
-	checker.hPow.exp(&checker.h, bs)
+	checker.hPow.Scale(&checker.h, bs)
 	checker.gPow.Add(&checker.gPow, &checker.hPow)
 
 	c.evaluate(&checker.eval, &vshare.share.index)
-	return checker.gPow.eq(&checker.eval)
+	return checker.gPow.Eq(&checker.eval)
 }
 
 // A VSSharer is capable of creating a verifiable sharing of a secret, which is
@@ -169,7 +201,7 @@ func (s *VSSharer) Share(vshares *VerifiableShares, c *Commitment, secret secp25
 	// Finish the computation of the commitments
 	for i, coeff := range s.sharer.coeffs {
 		coeff.GetB32(bs[:])
-		s.hPow.exp(&s.h, bs)
+		s.hPow.Scale(&s.h, bs)
 		c.points[i].Add(&c.points[i], &s.hPow)
 	}
 

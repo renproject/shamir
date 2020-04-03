@@ -109,6 +109,8 @@ func (sharer *Sharer) Share(shares *Shares, secret secp256k1.Secp256k1N, k int) 
 	return nil
 }
 
+// Sets the coefficients of the Sharer to represent a random degree k-1
+// polynomial with constant term equal to the given secret.
 func (sharer *Sharer) setRandomCoeffs(secret secp256k1.Secp256k1N, k int) {
 	sharer.coeffs = sharer.coeffs[:k]
 	sharer.coeffs[0] = secret
@@ -117,8 +119,10 @@ func (sharer *Sharer) setRandomCoeffs(secret secp256k1.Secp256k1N, k int) {
 	}
 }
 
-// Modifies y, but leaves x and coeffs unchanged. Normalizes y, so this this is
-// not neccesary to do manually after calling this function.
+// Evaluates the polynomial defined by the given coefficients at the point x
+// and stores the result in y. Modifies y, but leaves x and coeffs unchanged.
+// Normalizes y, so this this is not neccesary to do manually after calling
+// this function.
 func polyEval(y, x *secp256k1.Secp256k1N, coeffs []secp256k1.Secp256k1N) {
 	y.Set(&coeffs[len(coeffs)-1])
 	for i := len(coeffs) - 2; i >= 0; i-- {
