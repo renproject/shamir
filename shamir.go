@@ -95,26 +95,37 @@ func (sharer *Sharer) Share(shares *Shares, secret secp256k1.Secp256k1N, k int) 
 	}
 
 	// Set coefficients
-	sharer.coeffs = sharer.coeffs[:k]
-	sharer.coeffs[0] = secret
-	for i := 1; i < len(sharer.coeffs); i++ {
-		sharer.coeffs[i] = secp256k1.RandomSecp256k1N()
-	}
+	sharer.setRandomCoeffs(secret, k)
 
 	// Set shares
 	*shares = (*shares)[:len(sharer.indices)]
 	var eval secp256k1.Secp256k1N
 	for i, ind := range sharer.indices {
-		eval.Set(&sharer.coeffs[k-1])
-		for j := k - 2; j >= 0; j-- {
-			eval.Mul(&eval, &ind)
-			eval.Add(&eval, &sharer.coeffs[j])
-		}
-		eval.Normalize()
-		(*shares)[i] = NewShare(ind, eval)
+		polyEval(&eval, &ind, sharer.coeffs)
+		(*shares)[i].index = ind
+		(*shares)[i].value = eval
 	}
 
 	return nil
+}
+
+func (sharer *Sharer) setRandomCoeffs(secret secp256k1.Secp256k1N, k int) {
+	sharer.coeffs = sharer.coeffs[:k]
+	sharer.coeffs[0] = secret
+	for i := 1; i < k; i++ {
+		sharer.coeffs[i] = secp256k1.RandomSecp256k1N()
+	}
+}
+
+// Modifies y, but leaves x and coeffs unchanged. Normalizes y, so this this is
+// not neccesary to do manually after calling this function.
+func polyEval(y, x *secp256k1.Secp256k1N, coeffs []secp256k1.Secp256k1N) {
+	y.Set(&coeffs[len(coeffs)-1])
+	for i := len(coeffs) - 2; i >= 0; i-- {
+		y.Mul(y, x)
+		y.Add(y, &coeffs[i])
+	}
+	y.Normalize()
 }
 
 // A Reconstructor is responsible for reconstructing shares into their

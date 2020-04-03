@@ -1,25 +1,44 @@
 package shamir
 
 import (
-	"fmt"
-	"math/big"
-
-	ec "github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/renproject/secp256k1-go"
 )
+
+type VerifiableShare struct {
+	share Share
+	r     secp256k1.Secp256k1N
+}
+
+func NewVerifiableShare(share Share, r secp256k1.Secp256k1N) VerifiableShare {
+	return VerifiableShare{share, r}
+}
+
+func (vs *VerifiableShare) Add(a, b *VerifiableShare) {
+	vs.share.Add(&a.share, &b.share)
+	vs.r.Add(&a.r, &b.r)
+	vs.r.Normalize()
+}
+
+func (vs *VerifiableShare) Scale(other *VerifiableShare, scale *secp256k1.Secp256k1N) {
+	vs.share.Scale(&other.share, scale)
+	vs.r.Mul(&other.r, scale)
+	vs.r.Normalize()
+}
+
+type VerifiableShares []VerifiableShare
 
 // A Commitment is used to verify that a sharing has been performed correctly.
 type Commitment struct {
 	// Curve points that represent commitments to each of the coefficients.
 	// Index i corresponds to coefficient c_i.
-	points []curvePoint
+	points []CurvePoint
 }
 
 // NewCommitmentWithCapacity creates a new Commitment with the given capacity.
 // This capacity represents the maximum reconstruction threshold, k, that this
 // commitment can be used for.
 func NewCommitmentWithCapacity(k int) Commitment {
-	points := make([]curvePoint, k)
+	points := make([]CurvePoint, k)
 	return Commitment{points}
 }
 
@@ -35,7 +54,7 @@ func NewCommitmentWithCapacity(k int) Commitment {
 // as the greater of the capacities of the two inputs, then this function will
 // panic.
 func (c *Commitment) Add(a, b *Commitment) {
-	var smaller, larger []curvePoint
+	var smaller, larger []CurvePoint
 	if len(a.points) > len(b.points) {
 		smaller, larger = b.points, a.points
 	} else {
@@ -44,7 +63,7 @@ func (c *Commitment) Add(a, b *Commitment) {
 
 	c.points = c.points[:len(larger)]
 	for i := range smaller {
-		c.points[i].add(&smaller[i], &larger[i])
+		c.points[i].Add(&smaller[i], &larger[i])
 	}
 	copy(c.points[len(smaller):], larger[len(smaller):])
 }
@@ -65,29 +84,37 @@ func (c *Commitment) Scale(other *Commitment, scale *secp256k1.Secp256k1N) {
 	}
 }
 
-// IsValid returns true if the given share is correct with respect to the
-// commitment, and false otherwise,
-func (c *Commitment) IsValid(share *Share) bool {
-	var bs [32]byte
-	value := share.Value()
-	value.GetB32(bs[:])
-	shareComm := curvePoint{}
-
-	shareComm.baseExp(bs)
-	eval := c.evaluate(share.Index())
-	return shareComm.eq(&eval)
+func (c *Commitment) evaluate(eval *CurvePoint, index *secp256k1.Secp256k1N) {
+	// Evaluate the polynomial in the exponent
+	eval.Set(&c.points[len(c.points)-1])
+	for i := len(c.points) - 2; i >= 0; i-- {
+		eval.scale(eval, index)
+		eval.Add(eval, &c.points[i])
+	}
 }
 
-func (c *Commitment) evaluate(index secp256k1.Secp256k1N) curvePoint {
-	// Evaluate the polynomial in the exponent
-	eval := newCurvePoint()
-	eval.set(&c.points[len(c.points)-1])
-	for i := len(c.points) - 2; i >= 0; i-- {
-		eval.scale(&eval, &index)
-		eval.add(&eval, &c.points[i])
-	}
+type VSSChecker struct {
+	h CurvePoint
 
-	return eval
+	// Cached vairables
+	eval, gPow, hPow CurvePoint
+}
+
+func NewVSSChecker(h CurvePoint) VSSChecker {
+	eval, gPow, hPow := NewCurvePoint(), NewCurvePoint(), NewCurvePoint()
+	return VSSChecker{h, eval, gPow, hPow}
+}
+
+func (checker *VSSChecker) IsValid(c *Commitment, vshare *VerifiableShare) bool {
+	var bs [32]byte
+	vshare.share.value.GetB32(bs[:])
+	checker.gPow.BaseExp(bs)
+	vshare.r.GetB32(bs[:])
+	checker.hPow.exp(&checker.h, bs)
+	checker.gPow.Add(&checker.gPow, &checker.hPow)
+
+	c.evaluate(&checker.eval, &vshare.share.index)
+	return checker.gPow.eq(&checker.eval)
 }
 
 // A VSSharer is capable of creating a verifiable sharing of a secret, which is
@@ -95,12 +122,19 @@ func (c *Commitment) evaluate(index secp256k1.Secp256k1N) curvePoint {
 // a collection of commitments to each of the coefficients of the sharing.
 type VSSharer struct {
 	sharer Sharer
+	h      CurvePoint
+
+	// Cached variables
+	shares Shares
+	hPow   CurvePoint
 }
 
 // NewVSSharer constructs a new VSSharer from the given set of indices.
-func NewVSSharer(indices []secp256k1.Secp256k1N) VSSharer {
+func NewVSSharer(indices []secp256k1.Secp256k1N, h CurvePoint) VSSharer {
 	sharer := NewSharer(indices)
-	return VSSharer{sharer}
+	shares := make(Shares, len(indices))
+	hPow := NewCurvePoint()
+	return VSSharer{sharer, h, shares, hPow}
 }
 
 // Share creates verifiable Shamir shares for the given secret at the given
@@ -111,8 +145,8 @@ func NewVSSharer(indices []secp256k1.Secp256k1N) VSSharer {
 // Panics: This function will panic if the destination shares slice has a
 // capacity less than n (the number of indices), or if the destination
 // commitment has a capacity less than k.
-func (s *VSSharer) Share(shares *Shares, c *Commitment, secret secp256k1.Secp256k1N, k int) error {
-	err := s.sharer.Share(shares, secret, k)
+func (s *VSSharer) Share(vshares *VerifiableShares, c *Commitment, secret secp256k1.Secp256k1N, k int) error {
+	err := s.sharer.Share(&s.shares, secret, k)
 	if err != nil {
 		return err
 	}
@@ -123,49 +157,21 @@ func (s *VSSharer) Share(shares *Shares, c *Commitment, secret secp256k1.Secp256
 	c.points = c.points[:k]
 	for i, coeff := range s.sharer.coeffs {
 		coeff.GetB32(bs[:])
-		c.points[i].baseExp(bs)
+		c.points[i].BaseExp(bs)
+	}
+
+	s.sharer.setRandomCoeffs(secp256k1.RandomSecp256k1N(), k)
+	for i, ind := range s.sharer.indices {
+		(*vshares)[i].share = s.shares[i]
+		polyEval(&(*vshares)[i].r, &ind, s.sharer.coeffs)
+	}
+
+	// Finish the computation of the commitments
+	for i, coeff := range s.sharer.coeffs {
+		coeff.GetB32(bs[:])
+		s.hPow.exp(&s.h, bs)
+		c.points[i].Add(&c.points[i], &s.hPow)
 	}
 
 	return nil
-}
-
-type curvePoint struct {
-	x, y *big.Int
-}
-
-func (p *curvePoint) set(other *curvePoint) {
-	p.x.Set(other.x)
-	p.y.Set(other.y)
-}
-
-func (p curvePoint) String() string {
-	return fmt.Sprintf("(%v, %v)", p.x, p.y)
-}
-
-func newCurvePoint() curvePoint {
-	x, y := big.NewInt(0), big.NewInt(0)
-	return curvePoint{x, y}
-}
-
-func (p *curvePoint) eq(other *curvePoint) bool {
-	return p.x.Cmp(other.x) == 0 && p.y.Cmp(other.y) == 0
-}
-
-func (p *curvePoint) baseExp(bs [32]byte) {
-	p.x, p.y = ec.S256().ScalarBaseMult(bs[:])
-}
-
-func (p *curvePoint) add(a, b *curvePoint) {
-	p.x, p.y = ec.S256().Add(a.x, a.y, b.x, b.y)
-}
-
-func (p *curvePoint) scale(other *curvePoint, scale *secp256k1.Secp256k1N) {
-	// Short circuit if the index is one
-	if scale.IsOne() {
-		p.x, p.y = other.x, other.y
-	}
-
-	var bs [32]byte
-	scale.GetB32(bs[:])
-	p.x, p.y = ec.S256().ScalarMult(other.x, other.y, bs[:])
 }
