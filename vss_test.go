@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	. "github.com/renproject/shamir"
+	"github.com/renproject/shamir/curve"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -12,7 +13,7 @@ import (
 )
 
 var _ = Describe("Verifiable secret sharing", func() {
-	h := RandomCurvePoint()
+	h := curve.Random()
 
 	Context("when checking the validity of shares", func() {
 		Specify("valid share should be valid", func() {
@@ -166,7 +167,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 func BenchmarkVSShare(b *testing.B) {
 	n := 100
 	k := 33
-	h := RandomCurvePoint()
+	h := curve.Random()
 
 	indices := sequentialIndices(n)
 	vshares := make(VerifiableShares, n)
@@ -183,7 +184,7 @@ func BenchmarkVSShare(b *testing.B) {
 func BenchmarkVSSVerify(b *testing.B) {
 	n := 100
 	k := 33
-	h := RandomCurvePoint()
+	h := curve.Random()
 
 	indices := sequentialIndices(n)
 	vshares := make(VerifiableShares, n)

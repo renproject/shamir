@@ -1,4 +1,4 @@
-package shamir
+package curve
 
 import (
 	"fmt"
@@ -8,51 +8,51 @@ import (
 	"github.com/renproject/secp256k1-go"
 )
 
-// CurvePoint represents a point on the secp256k1 elliptice curve.
-type CurvePoint struct {
+// Point represents a point on the secp256k1 elliptice curve.
+type Point struct {
 	x, y *big.Int
 }
 
 // String implements the Stringer interface.
-func (p CurvePoint) String() string {
+func (p Point) String() string {
 	return fmt.Sprintf("(%v, %v)", p.x, p.y)
 }
 
-// NewCurvePoint constructs a new curve point.
-func NewCurvePoint() CurvePoint {
+// New constructs a new curve point.
+func New() Point {
 	x, y := big.NewInt(0), big.NewInt(0)
-	return CurvePoint{x, y}
+	return Point{x, y}
 }
 
-// NewCurvePointFromCoords constructs a new curve point from the given x and y
+// NewFromCoords constructs a new curve point from the given x and y
 // coordinates.
 //
 // NOTE: This function does not check that the point is actually on the curve.
-func NewCurvePointFromCoords(x, y *big.Int) CurvePoint {
-	return CurvePoint{x, y}
+func NewFromCoords(x, y *big.Int) Point {
+	return Point{x, y}
 }
 
 // Set sets the calling curve point to be equal to the given curve point.
-func (p *CurvePoint) Set(other *CurvePoint) {
+func (p *Point) Set(other *Point) {
 	p.x.Set(other.x)
 	p.y.Set(other.y)
 }
 
 // Eq returns true if the two curve points are equal, and false otherwise.
-func (p *CurvePoint) Eq(other *CurvePoint) bool {
+func (p *Point) Eq(other *Point) bool {
 	return p.x.Cmp(other.x) == 0 && p.y.Cmp(other.y) == 0
 }
 
 // BaseExp computes the scalar multiplication of the canonical generator of the
 // curve by the scalar represented by the given bytes in big endian format, and
 // stores the result in the caller.
-func (p *CurvePoint) BaseExp(bs [32]byte) {
+func (p *Point) BaseExp(bs [32]byte) {
 	p.x, p.y = ec.S256().ScalarBaseMult(bs[:])
 }
 
 // Add computes the curve addition of the two given curve points and stores the
 // result in the caller.
-func (p *CurvePoint) Add(a, b *CurvePoint) {
+func (p *Point) Add(a, b *Point) {
 	if a.Eq(b) {
 		p.x, p.y = ec.S256().Double(a.x, a.y)
 		return
@@ -63,16 +63,16 @@ func (p *CurvePoint) Add(a, b *CurvePoint) {
 // Scale computes the scalar multiplication of the given curve point and the
 // scalar represented by the given bytes in big endian format, and stores the
 // result in the caller.
-func (p *CurvePoint) Scale(other *CurvePoint, bs [32]byte) {
+func (p *Point) Scale(other *Point, bs [32]byte) {
 	p.x, p.y = ec.S256().ScalarMult(other.x, other.y, bs[:])
 }
 
-// RandomCurvePoint returns a random point on the elliptic curve.
-func RandomCurvePoint() CurvePoint {
+// Random returns a random point on the elliptic curve.
+func Random() Point {
 	var bs [32]byte
 	r := secp256k1.RandomSecp256k1N()
 	r.GetB32(bs[:])
-	h := NewCurvePoint()
+	h := New()
 	h.BaseExp(bs)
 	return h
 }
