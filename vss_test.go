@@ -48,8 +48,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 	// testing this obivously does not matter.
 	h := curve.Random()
 
-	// Tests for the correctness property (1).
-	Context("Correctness", func() {
+	Context("Correctness (1)", func() {
 		trials := 20
 		n := 20
 
@@ -85,7 +84,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 	//	1. The index of the share could be changed.
 	//	2. The value of the share could be changed.
 	//	3. The decommitment value of the verifiable share could be changed.
-	Context("Soundness", func() {
+	Context("Soundness (2)", func() {
 		trials := 20
 		n := 20
 
@@ -151,11 +150,11 @@ var _ = Describe("Verifiable secret sharing", func() {
 	//	should fail the validity check of the new auxiliary information.
 	//	3. The summed shares should form a consistent sharing of the secret
 	//	that is defined as the sum of the two original secrets.
-	Context("Homomorphic addition", func() {
+	Context("Homomorphic addition (3)", func() {
 		trials := 20
 		n := 20
 
-		var k int
+		var k1, k2, kmax int
 		var indices []secp256k1.Secp256k1N
 		var vshares1, vshares2, vsharesSummed VerifiableShares
 		var c1, c2, cSummed Commitment
@@ -176,12 +175,18 @@ var _ = Describe("Verifiable secret sharing", func() {
 		})
 
 		CreateShares := func(kLower int) {
-			k = randRange(kLower, n)
+			k1 = randRange(kLower, n)
+			k2 = randRange(kLower, n)
+			if k1 < k2 {
+				kmax = k2
+			} else {
+				kmax = k1
+			}
 			secret1 = secp256k1.RandomSecp256k1N()
 			secret2 = secp256k1.RandomSecp256k1N()
 			secretSummed.Add(&secret1, &secret2)
-			_ = vssharer.Share(&vshares1, &c1, secret1, k)
-			_ = vssharer.Share(&vshares2, &c2, secret2, k)
+			_ = vssharer.Share(&vshares1, &c1, secret1, k1)
+			_ = vssharer.Share(&vshares2, &c2, secret2, k2)
 
 			// Create the shares for the sum
 			cSummed.Add(&c1, &c2)
@@ -245,7 +250,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 			for i := 0; i < trials; i++ {
 				CreateShares(1)
 				Expect(
-					vsharesAreConsistent(vsharesSummed, secretSummed, reconstructor, k, 100),
+					vsharesAreConsistent(vsharesSummed, secretSummed, &reconstructor, kmax, 100),
 				).To(BeTrue())
 			}
 		})
@@ -264,7 +269,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 	//	should fail the validity check of the new auxiliary information.
 	//	3. The scaled shares should form a consistent sharing of the secret
 	//	that is defined as the product of the original secret and the scalar.
-	Context("Homomorphic scaling", func() {
+	Context("Homomorphic scaling (4)", func() {
 		trials := 20
 		n := 20
 
@@ -355,10 +360,24 @@ var _ = Describe("Verifiable secret sharing", func() {
 			for i := 0; i < trials; i++ {
 				CreateShares(1)
 				Expect(
-					vsharesAreConsistent(vsharesScaled, secretScaled, reconstructor, k, 100),
+					vsharesAreConsistent(vsharesScaled, secretScaled, &reconstructor, k, 100),
 				).To(BeTrue())
 			}
 		})
+	})
+
+	//
+	// Miscellaneous tests
+	//
+
+	Specify("trying to share when k is larger than n should fail", func() {
+		n := 20
+
+		indices := sequentialIndices(n)
+		vsharer := NewVSSharer(indices, h)
+
+		err := vsharer.Share(nil, nil, secp256k1.Secp256k1N{}, n+1)
+		Expect(err).To(HaveOccurred())
 	})
 })
 
@@ -437,7 +456,7 @@ func perturbDecommitment(vs *VerifiableShare) {
 func vsharesAreConsistent(
 	vshares VerifiableShares,
 	secret secp256k1.Secp256k1N,
-	reconstructor Reconstructor,
+	reconstructor *Reconstructor,
 	k, trials int,
 ) bool {
 	shares := make(Shares, len(vshares))

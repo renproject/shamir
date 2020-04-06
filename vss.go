@@ -28,11 +28,6 @@ func (vs *VerifiableShare) Share() Share {
 	return vs.share
 }
 
-// Value returns the index of the verifiable share.
-func (vs *VerifiableShare) Value() secp256k1.Secp256k1N {
-	return vs.share.value
-}
-
 // Decommitment returns the index of the verifiable share.
 func (vs *VerifiableShare) Decommitment() secp256k1.Secp256k1N {
 	return vs.r
