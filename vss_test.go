@@ -3,6 +3,7 @@ package shamir_test
 import (
 	"math/rand"
 	"testing"
+	"time"
 
 	. "github.com/renproject/shamir"
 	"github.com/renproject/shamir/curve"
@@ -40,6 +41,8 @@ import (
 //	scaling by some public constant value. We require a property analogous to
 //	point 3 in this case.
 var _ = Describe("Verifiable secret sharing", func() {
+	rand.Seed(time.Now().UnixNano())
+
 	// Pedersen commitment parameter. This curve point needs to be a generator
 	// of the elliptic curve group. Since the group has prime order, any curve
 	// point is a generator (expect for the identity), and so we may just one
