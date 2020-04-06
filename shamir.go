@@ -268,7 +268,7 @@ OUTER:
 	}
 	r.complement = r.complement[:len(r.indices)-len(shares)]
 
-	// This is an altered for of Lagrange interpolation that aims to utilise
+	// This is an altered form of Lagrange interpolation that aims to utilise
 	// more precomputed data. It works as follows. In the product, instead of
 	// ranging over every index in the shares, we use a precomputed value that
 	// ranges over all indices, and then to adjust it for the given shares we
