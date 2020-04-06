@@ -40,6 +40,7 @@ import (
 //	4. Homomorphic under scaling: Pedersen VSS is also homomorphic under
 //	scaling by some public constant value. We require a property analogous to
 //	point 3 in this case.
+//
 var _ = Describe("Verifiable secret sharing", func() {
 	rand.Seed(time.Now().UnixNano())
 
