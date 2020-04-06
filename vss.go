@@ -23,6 +23,21 @@ func NewVerifiableShare(share Share, r secp256k1.Secp256k1N) VerifiableShare {
 	return VerifiableShare{share, r}
 }
 
+// Share returns the underlying Shamir share of the verifiable share.
+func (vs *VerifiableShare) Share() Share {
+	return vs.share
+}
+
+// Value returns the index of the verifiable share.
+func (vs *VerifiableShare) Value() secp256k1.Secp256k1N {
+	return vs.share.value
+}
+
+// Decommitment returns the index of the verifiable share.
+func (vs *VerifiableShare) Decommitment() secp256k1.Secp256k1N {
+	return vs.r
+}
+
 // Add computes the addition of the two input shares and stores the result in
 // the caller. This is defined as adding the respective normal (unverifiable)
 // shares and adding the respective decommitment values. In general, the
