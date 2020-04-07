@@ -116,9 +116,14 @@ func (sharer *Sharer) Share(dst *Shares, secret secp256k1.Secp256k1N, k int) err
 
 // Sets the coefficients of the Sharer to represent a random degree k-1
 // polynomial with constant term equal to the given secret.
+//
+// Panics: This function will panic if k is greater than len(sharer.coeffs).
 func (sharer *Sharer) setRandomCoeffs(secret secp256k1.Secp256k1N, k int) {
 	sharer.coeffs = sharer.coeffs[:k]
 	sharer.coeffs[0] = secret
+
+	// NOTE: If k is greater than len(sharer.coeffs), then this loop will panic
+	// when i > len(sharer.coeffs).
 	for i := 1; i < k; i++ {
 		sharer.coeffs[i] = secp256k1.RandomSecp256k1N()
 	}
