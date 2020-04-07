@@ -59,7 +59,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		var k int
 		var secret secp256k1.Secp256k1N
 
-		indices := sequentialIndices(n)
+		indices := randomIndices(n)
 		vshares := make(VerifiableShares, n)
 		c := NewCommitmentWithCapacity(n)
 		vssharer := NewVSSharer(indices, h)
@@ -68,7 +68,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		Specify("all shares constructed from the VSS scheme should be valid", func() {
 			for i := 0; i < trials; i++ {
 				// Create a random sharing.
-				k = rand.Intn(n) + 1
+				k = randRange(1, n)
 				secret = secp256k1.RandomSecp256k1N()
 				err := vssharer.Share(&vshares, &c, secret, k)
 				Expect(err).ToNot(HaveOccurred())
@@ -101,7 +101,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		var secret secp256k1.Secp256k1N
 
 		BeforeEach(func() {
-			indices = sequentialIndices(n)
+			indices = randomIndices(n)
 			vshares = make(VerifiableShares, n)
 			c = NewCommitmentWithCapacity(n)
 			vssharer = NewVSSharer(indices, h)
@@ -167,7 +167,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		var secret1, secret2, secretSummed secp256k1.Secp256k1N
 
 		BeforeEach(func() {
-			indices = sequentialIndices(n)
+			indices = randomIndices(n)
 			vshares1 = make(VerifiableShares, n)
 			vshares2 = make(VerifiableShares, n)
 			vsharesSummed = make(VerifiableShares, n)
@@ -181,11 +181,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		CreateShares := func(kLower int) {
 			k1 = randRange(kLower, n)
 			k2 = randRange(kLower, n)
-			if k1 < k2 {
-				kmax = k2
-			} else {
-				kmax = k1
-			}
+			kmax = max(k1, k2)
 			secret1 = secp256k1.RandomSecp256k1N()
 			secret2 = secp256k1.RandomSecp256k1N()
 			secretSummed.Add(&secret1, &secret2)
@@ -286,7 +282,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		var secret, scale, secretScaled secp256k1.Secp256k1N
 
 		BeforeEach(func() {
-			indices = sequentialIndices(n)
+			indices = randomIndices(n)
 			vshares = make(VerifiableShares, n)
 			vsharesScaled = make(VerifiableShares, n)
 			c = NewCommitmentWithCapacity(n)
@@ -377,7 +373,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 	Specify("trying to share when k is larger than n should fail", func() {
 		n := 20
 
-		indices := sequentialIndices(n)
+		indices := randomIndices(n)
 		vsharer := NewVSSharer(indices, h)
 
 		err := vsharer.Share(nil, nil, secp256k1.Secp256k1N{}, n+1)
@@ -390,7 +386,7 @@ func BenchmarkVSShare(b *testing.B) {
 	k := 33
 	h := curve.Random()
 
-	indices := sequentialIndices(n)
+	indices := randomIndices(n)
 	vshares := make(VerifiableShares, n)
 	c := NewCommitmentWithCapacity(n)
 	vssharer := NewVSSharer(indices, h)
@@ -407,7 +403,7 @@ func BenchmarkVSSVerify(b *testing.B) {
 	k := 33
 	h := curve.Random()
 
-	indices := sequentialIndices(n)
+	indices := randomIndices(n)
 	vshares := make(VerifiableShares, n)
 	c := NewCommitmentWithCapacity(n)
 	vssharer := NewVSSharer(indices, h)
@@ -469,13 +465,5 @@ func vsharesAreConsistent(
 		shares[i] = vshare.Share()
 	}
 
-	for i := 0; i < trials; i++ {
-		shuffle(shares)
-		recon, err := reconstructor.Open(shares[:k])
-		if err != nil || !recon.Eq(&secret) {
-			return false
-		}
-	}
-
-	return true
+	return sharesAreConsistent(shares, secret, reconstructor, k, trials)
 }
