@@ -1,1 +1,3 @@
-./prof/*
+**/prof/*
+**/*.test
+**/cover*

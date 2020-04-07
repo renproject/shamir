@@ -82,7 +82,8 @@ func NewSharer(indices []secp256k1.Secp256k1N) Sharer {
 // Share creates Shamir shares for the given secret at the given threshold, and
 // stores them in the given destination slice. In the returned Shares, there
 // will be one share for each index in the indices that were used to construct
-// the Sharer.
+// the Sharer. If k is larger than the number of indices, in which case it
+// would be impossible to reconstruct the secret, an error is returned.
 //
 // Panics: This function will panic if the destination shares slice has a
 // capacity less than n (the number of indices).
@@ -95,26 +96,41 @@ func (sharer *Sharer) Share(shares *Shares, secret secp256k1.Secp256k1N, k int) 
 	}
 
 	// Set coefficients
-	sharer.coeffs = sharer.coeffs[:k]
-	sharer.coeffs[0] = secret
-	for i := 1; i < len(sharer.coeffs); i++ {
-		sharer.coeffs[i] = secp256k1.RandomSecp256k1N()
-	}
+	sharer.setRandomCoeffs(secret, k)
 
 	// Set shares
 	*shares = (*shares)[:len(sharer.indices)]
 	var eval secp256k1.Secp256k1N
 	for i, ind := range sharer.indices {
-		eval.Set(&sharer.coeffs[k-1])
-		for j := k - 2; j >= 0; j-- {
-			eval.Mul(&eval, &ind)
-			eval.Add(&eval, &sharer.coeffs[j])
-		}
-		eval.Normalize()
-		(*shares)[i] = NewShare(ind, eval)
+		polyEval(&eval, &ind, sharer.coeffs)
+		(*shares)[i].index = ind
+		(*shares)[i].value = eval
 	}
 
 	return nil
+}
+
+// Sets the coefficients of the Sharer to represent a random degree k-1
+// polynomial with constant term equal to the given secret.
+func (sharer *Sharer) setRandomCoeffs(secret secp256k1.Secp256k1N, k int) {
+	sharer.coeffs = sharer.coeffs[:k]
+	sharer.coeffs[0] = secret
+	for i := 1; i < k; i++ {
+		sharer.coeffs[i] = secp256k1.RandomSecp256k1N()
+	}
+}
+
+// Evaluates the polynomial defined by the given coefficients at the point x
+// and stores the result in y. Modifies y, but leaves x and coeffs unchanged.
+// Normalizes y, so this this is not neccesary to do manually after calling
+// this function.
+func polyEval(y, x *secp256k1.Secp256k1N, coeffs []secp256k1.Secp256k1N) {
+	y.Set(&coeffs[len(coeffs)-1])
+	for i := len(coeffs) - 2; i >= 0; i-- {
+		y.Mul(y, x)
+		y.Add(y, &coeffs[i])
+	}
+	y.Normalize()
 }
 
 // A Reconstructor is responsible for reconstructing shares into their
@@ -142,6 +158,7 @@ func NewReconstructor(indices []secp256k1.Secp256k1N) Reconstructor {
 	for i := range indices {
 		fullProd[i] = secp256k1.OneSecp256k1N()
 		neg.Neg(&indices[i], 1)
+		neg.Normalize()
 		for j := range indices {
 			if i == j {
 				continue
@@ -253,7 +270,7 @@ OUTER:
 	}
 	r.complement = r.complement[:len(r.indices)-len(shares)]
 
-	// This is an altered for of Lagrange interpolation that aims to utilise
+	// This is an altered form of Lagrange interpolation that aims to utilise
 	// more precomputed data. It works as follows. In the product, instead of
 	// ranging over every index in the shares, we use a precomputed value that
 	// ranges over all indices, and then to adjust it for the given shares we
