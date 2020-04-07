@@ -2,6 +2,7 @@ package testutil
 
 import "math/rand"
 
+// Max returns the maximum of the two given ints.
 func Max(a, b int) int {
 	if a <= b {
 		return b
@@ -9,7 +10,7 @@ func Max(a, b int) int {
 	return a
 }
 
-// Returns a random number x such that lower <= x <= upper.
+// RandRange returns a random number x such that lower <= x <= upper.
 func RandRange(lower, upper int) int {
 	return rand.Intn(upper+1-lower) + lower
 }
