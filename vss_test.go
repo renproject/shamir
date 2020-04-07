@@ -7,6 +7,7 @@ import (
 
 	. "github.com/renproject/shamir"
 	"github.com/renproject/shamir/curve"
+	. "github.com/renproject/shamir/testutil"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -59,7 +60,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		var k int
 		var secret secp256k1.Secp256k1N
 
-		indices := randomIndices(n)
+		indices := RandomIndices(n)
 		vshares := make(VerifiableShares, n)
 		c := NewCommitmentWithCapacity(n)
 		vssharer := NewVSSharer(indices, h)
@@ -68,7 +69,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		Specify("all shares constructed from the VSS scheme should be valid", func() {
 			for i := 0; i < trials; i++ {
 				// Create a random sharing.
-				k = randRange(1, n)
+				k = RandRange(1, n)
 				secret = secp256k1.RandomSecp256k1N()
 				err := vssharer.Share(&vshares, &c, secret, k)
 				Expect(err).ToNot(HaveOccurred())
@@ -101,7 +102,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		var secret secp256k1.Secp256k1N
 
 		BeforeEach(func() {
-			indices = randomIndices(n)
+			indices = RandomIndices(n)
 			vshares = make(VerifiableShares, n)
 			c = NewCommitmentWithCapacity(n)
 			vssharer = NewVSSharer(indices, h)
@@ -110,7 +111,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 		ShareAndCheckWithPerturbed := func(kLower int, perturbShare func(vs *VerifiableShare)) {
 			for i := 0; i < trials; i++ {
-				k = randRange(kLower, n)
+				k = RandRange(kLower, n)
 				secret = secp256k1.RandomSecp256k1N()
 				err := vssharer.Share(&vshares, &c, secret, k)
 				Expect(err).ToNot(HaveOccurred())
@@ -129,15 +130,15 @@ var _ = Describe("Verifiable secret sharing", func() {
 			// We need to ensure that k is at least 2, otherwise every point on
 			// the sharing polynomial is the same and changing the index won't
 			// actually make the share invalid.
-			ShareAndCheckWithPerturbed(2, perturbIndex)
+			ShareAndCheckWithPerturbed(2, PerturbIndex)
 		})
 
 		Specify("a share with a modified value should be invalid (2)", func() {
-			ShareAndCheckWithPerturbed(1, perturbValue)
+			ShareAndCheckWithPerturbed(1, PerturbValue)
 		})
 
 		Specify("a share with a modified decommitment should be invalid (3)", func() {
-			ShareAndCheckWithPerturbed(1, perturbDecommitment)
+			ShareAndCheckWithPerturbed(1, PerturbDecommitment)
 		})
 	})
 
@@ -167,7 +168,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		var secret1, secret2, secretSummed secp256k1.Secp256k1N
 
 		BeforeEach(func() {
-			indices = randomIndices(n)
+			indices = RandomIndices(n)
 			vshares1 = make(VerifiableShares, n)
 			vshares2 = make(VerifiableShares, n)
 			vsharesSummed = make(VerifiableShares, n)
@@ -179,9 +180,9 @@ var _ = Describe("Verifiable secret sharing", func() {
 		})
 
 		CreateShares := func(kLower int) {
-			k1 = randRange(kLower, n)
-			k2 = randRange(kLower, n)
-			kmax = max(k1, k2)
+			k1 = RandRange(kLower, n)
+			k2 = RandRange(kLower, n)
+			kmax = Max(k1, k2)
 			secret1 = secp256k1.RandomSecp256k1N()
 			secret2 = secp256k1.RandomSecp256k1N()
 			secretSummed.Add(&secret1, &secret2)
@@ -226,21 +227,21 @@ var _ = Describe("Verifiable secret sharing", func() {
 				// point on the sharing polynomial is the same and changing the
 				// index won't actually make the share invalid.
 				CreateShares(2)
-				PerturbAndCheck(perturbIndex)
+				PerturbAndCheck(PerturbIndex)
 			}
 		})
 
 		Specify("a share with an altered value should be detected (2.2)", func() {
 			for i := 0; i < trials; i++ {
 				CreateShares(1)
-				PerturbAndCheck(perturbValue)
+				PerturbAndCheck(PerturbValue)
 			}
 		})
 
 		Specify("a share with an altered decommitment should be detected (2.3)", func() {
 			for i := 0; i < trials; i++ {
 				CreateShares(1)
-				PerturbAndCheck(perturbDecommitment)
+				PerturbAndCheck(PerturbDecommitment)
 			}
 		})
 
@@ -250,7 +251,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 			for i := 0; i < trials; i++ {
 				CreateShares(1)
 				Expect(
-					vsharesAreConsistent(vsharesSummed, secretSummed, &reconstructor, kmax, 100),
+					VsharesAreConsistent(vsharesSummed, secretSummed, &reconstructor, kmax, 100),
 				).To(BeTrue())
 			}
 		})
@@ -282,7 +283,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		var secret, scale, secretScaled secp256k1.Secp256k1N
 
 		BeforeEach(func() {
-			indices = randomIndices(n)
+			indices = RandomIndices(n)
 			vshares = make(VerifiableShares, n)
 			vsharesScaled = make(VerifiableShares, n)
 			c = NewCommitmentWithCapacity(n)
@@ -292,7 +293,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		})
 
 		CreateShares := func(kLower int) {
-			k = randRange(kLower, n)
+			k = RandRange(kLower, n)
 			secret = secp256k1.RandomSecp256k1N()
 			scale = secp256k1.RandomSecp256k1N()
 			secretScaled.Mul(&secret, &scale)
@@ -336,21 +337,21 @@ var _ = Describe("Verifiable secret sharing", func() {
 				// point on the sharing polynomial is the same and changing the
 				// index won't actually make the share invalid.
 				CreateShares(2)
-				PerturbAndCheck(perturbIndex)
+				PerturbAndCheck(PerturbIndex)
 			}
 		})
 
 		Specify("a share with an altered value should be detected (2.2)", func() {
 			for i := 0; i < trials; i++ {
 				CreateShares(1)
-				PerturbAndCheck(perturbValue)
+				PerturbAndCheck(PerturbValue)
 			}
 		})
 
 		Specify("a share with an altered decommitment should be detected (2.3)", func() {
 			for i := 0; i < trials; i++ {
 				CreateShares(1)
-				PerturbAndCheck(perturbDecommitment)
+				PerturbAndCheck(PerturbDecommitment)
 			}
 		})
 
@@ -360,7 +361,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 			for i := 0; i < trials; i++ {
 				CreateShares(1)
 				Expect(
-					vsharesAreConsistent(vsharesScaled, secretScaled, &reconstructor, k, 100),
+					VsharesAreConsistent(vsharesScaled, secretScaled, &reconstructor, k, 100),
 				).To(BeTrue())
 			}
 		})
@@ -373,7 +374,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 	Specify("trying to share when k is larger than n should fail", func() {
 		n := 20
 
-		indices := randomIndices(n)
+		indices := RandomIndices(n)
 		vsharer := NewVSSharer(indices, h)
 
 		err := vsharer.Share(nil, nil, secp256k1.Secp256k1N{}, n+1)
@@ -386,7 +387,7 @@ func BenchmarkVSShare(b *testing.B) {
 	k := 33
 	h := curve.Random()
 
-	indices := randomIndices(n)
+	indices := RandomIndices(n)
 	vshares := make(VerifiableShares, n)
 	c := NewCommitmentWithCapacity(n)
 	vssharer := NewVSSharer(indices, h)
@@ -403,7 +404,7 @@ func BenchmarkVSSVerify(b *testing.B) {
 	k := 33
 	h := curve.Random()
 
-	indices := randomIndices(n)
+	indices := RandomIndices(n)
 	vshares := make(VerifiableShares, n)
 	c := NewCommitmentWithCapacity(n)
 	vssharer := NewVSSharer(indices, h)
@@ -417,53 +418,4 @@ func BenchmarkVSSVerify(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		checker.IsValid(&c, &share)
 	}
-}
-
-// Returns a random number x such that lower <= x <= upper.
-func randRange(lower, upper int) int {
-	return rand.Intn(upper+1-lower) + lower
-}
-
-func perturbIndex(vs *VerifiableShare) {
-	share := vs.Share()
-	*vs = NewVerifiableShare(
-		NewShare(
-			secp256k1.RandomSecp256k1N(), // Altered
-			share.Value(),
-		),
-		vs.Decommitment(),
-	)
-}
-
-func perturbValue(vs *VerifiableShare) {
-	share := vs.Share()
-	*vs = NewVerifiableShare(
-		NewShare(
-			share.Index(),
-			secp256k1.RandomSecp256k1N(), // Altered
-		),
-		vs.Decommitment(),
-	)
-}
-
-func perturbDecommitment(vs *VerifiableShare) {
-	*vs = NewVerifiableShare(
-		vs.Share(),
-		secp256k1.RandomSecp256k1N(), // Altered
-	)
-}
-
-func vsharesAreConsistent(
-	vshares VerifiableShares,
-	secret secp256k1.Secp256k1N,
-	reconstructor *Reconstructor,
-	k, trials int,
-) bool {
-	shares := make(Shares, len(vshares))
-
-	for i, vshare := range vshares {
-		shares[i] = vshare.Share()
-	}
-
-	return sharesAreConsistent(shares, secret, reconstructor, k, trials)
 }
