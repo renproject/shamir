@@ -75,8 +75,10 @@ type Sharer struct {
 
 // NewSharer constructs a new Sharer object from the given set of indices.
 func NewSharer(indices []secp256k1.Secp256k1N) Sharer {
+	copiedIndices := make([]secp256k1.Secp256k1N, len(indices))
+	copy(copiedIndices, indices)
 	coeffs := make([]secp256k1.Secp256k1N, len(indices))
-	return Sharer{indices, coeffs}
+	return Sharer{indices: copiedIndices, coeffs: coeffs}
 }
 
 // Share creates Shamir shares for the given secret at the given threshold, and
@@ -87,7 +89,7 @@ func NewSharer(indices []secp256k1.Secp256k1N) Sharer {
 //
 // Panics: This function will panic if the destination shares slice has a
 // capacity less than n (the number of indices).
-func (sharer *Sharer) Share(shares *Shares, secret secp256k1.Secp256k1N, k int) error {
+func (sharer *Sharer) Share(dst *Shares, secret secp256k1.Secp256k1N, k int) error {
 	if k > len(sharer.indices) {
 		return fmt.Errorf(
 			"reconstruction threshold too large: expected k <= %v, got k = %v",
@@ -99,12 +101,12 @@ func (sharer *Sharer) Share(shares *Shares, secret secp256k1.Secp256k1N, k int) 
 	sharer.setRandomCoeffs(secret, k)
 
 	// Set shares
-	*shares = (*shares)[:len(sharer.indices)]
+	*dst = (*dst)[:len(sharer.indices)]
 	var eval secp256k1.Secp256k1N
 	for i, ind := range sharer.indices {
 		polyEval(&eval, &ind, sharer.coeffs)
-		(*shares)[i].index = ind
-		(*shares)[i].value = eval
+		(*dst)[i].index = ind
+		(*dst)[i].value = eval
 	}
 
 	return nil
