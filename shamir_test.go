@@ -5,138 +5,287 @@ import (
 	"testing"
 	"time"
 
-	. "."
-
+	"github.com/renproject/secp256k1-go"
+	
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/renproject/secp256k1-go"
+	. "github.com/renproject/shamir"
 )
 
+//
+// Let n and k be given where n >= k. Then Shamir secret sharing with these
+// parameters should satisfy the following properties:
+//
+//	1. Any element in the field can be shared such that n shares are produced.
+//	Further, any subset of k or more of these shares can be combined to
+//	reconstruct the shared element (secret).
+//
+//	2. The shares are homomorphically additive. This means that if two secrets
+//	are shared, then adding the respective shares (shares with the same index
+//	get added) results in a new sharing, and the secret value for this sharing
+//	is the sum of the two original secrets.
+//
+//	3. The shares are homomorphic with regard to scaling. This means that if a
+//	secret is shared, then multiplying each share by the same scalar results in
+//	a new sharing, and the secret value for this sharing is the product of the
+//	original secret and the scalar.
+//
 var _ = Describe("Shamir Secret Sharing", func() {
 	rand.Seed(time.Now().UnixNano())
 
-	Context("when sharing and reconstructing a secret", func() {
-		It("should reconstruct to the same shared secret", func() {
-			trials := 100
-			n := 20
-			var k int
+	zero := secp256k1.ZeroSecp256k1N()
 
-			indices := sequentialIndices(n)
+	Context("Sharing consistency (1)", func() {
+		trials := 100
+		n := 20
+
+		var k int
+		var secret secp256k1.Secp256k1N
+
+		Specify("any qualified subset can reconstruct the secret correctly", func() {
+			indices := randomIndices(n)
+			shares := make(Shares, n)
 			sharer := NewSharer(indices)
 			reconstructor := NewReconstructor(indices)
 
-			var secret secp256k1.Secp256k1N
 			for i := 0; i < trials; i++ {
-				k = rand.Intn(n) + 1
+				k = randRange(1, n)
 				secret = secp256k1.RandomSecp256k1N()
-				shares, err := sharer.Share(secret, k)
-				Expect(err).ToNot(HaveOccurred())
-				shuffle(shares)
-				recons, err := reconstructor.Open(shares[:k+rand.Intn(n-k+1)])
 
+				err := sharer.Share(&shares, secret, k)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(recons.Eq(&secret)).To(BeTrue())
+
+				Expect(
+					sharesAreConsistent(shares, secret, &reconstructor, k, 100),
+				).To(BeTrue())
 			}
 		})
 	})
 
-	Context("when creating shares from a secret", func() {
-		Specify("there should be the right number of shares and they should be well formed", func() {
-			trials := 100
-			n := 20
-			var k int
+	Context("Homomorphic under addition (2)", func() {
+		trials := 100
+		n := 20
 
-			indices := sequentialIndices(n)
+		var k1, k2, kmax int
+		var secret1, secret2, secretSummed secp256k1.Secp256k1N
+
+		Specify("summed shares should be a consistent sharing of the sum of the secrets", func() {
+			indices := randomIndices(n)
+			shares1 := make(Shares, n)
+			shares2 := make(Shares, n)
+			sharesSummed := make(Shares, n)
 			sharer := NewSharer(indices)
+			reconstructor := NewReconstructor(indices)
 
 			for i := 0; i < trials; i++ {
-				k = rand.Intn(n) + 1
-				secret := secp256k1.RandomSecp256k1N()
-				shares, err := sharer.Share(secret, k)
+				k1 = randRange(1, n)
+				k2 = randRange(1, n)
+				kmax = max(k1, k2)
+				secret1 = secp256k1.RandomSecp256k1N()
+				secret2 = secp256k1.RandomSecp256k1N()
+				secretSummed.Add(&secret1, &secret2)
 
-				Expect(err).ToNot(HaveOccurred())
-				Expect(len(shares)).To(Equal(n))
-				for i, share := range shares {
-					ind := share.Index()
-					Expect(ind.Uint64()).To(Equal(uint64(i + 1)))
+				_ = sharer.Share(&shares1, secret1, k1)
+				_ = sharer.Share(&shares2, secret2, k2)
+
+				// Construct the summed shares
+				for i := range sharesSummed {
+					sharesSummed[i].Add(&shares1[i], &shares2[i])
 				}
+
+				Expect(
+					sharesAreConsistent(sharesSummed, secretSummed, &reconstructor, kmax, 100),
+				).To(BeTrue())
+			}
+		})
+	})
+
+	Context("Homomorphic under scaling (3)", func() {
+		trials := 100
+		n := 20
+
+		var k int
+		var secret, scale, secretScaled secp256k1.Secp256k1N
+
+		Specify(
+			"scaled shares should be a consistent sharing of the product of the secret and the scalar",
+			func() {
+				indices := randomIndices(n)
+				shares := make(Shares, n)
+				sharesScaled := make(Shares, n)
+				sharer := NewSharer(indices)
+				reconstructor := NewReconstructor(indices)
+
+				for i := 0; i < trials; i++ {
+					k = randRange(1, n)
+					secret = secp256k1.RandomSecp256k1N()
+					scale = secp256k1.RandomSecp256k1N()
+					secretScaled.Mul(&secret, &scale)
+
+					_ = sharer.Share(&shares, secret, k)
+
+					// Construct the summed shares
+					for i := range sharesScaled {
+						sharesScaled[i].Scale(&shares[i], &scale)
+					}
+
+					Expect(
+						sharesAreConsistent(sharesScaled, secretScaled, &reconstructor, k, 100),
+					).To(BeTrue())
+				}
+			},
+		)
+	})
+
+	//
+	// Share tests
+	//
+
+	Context("Shares", func() {
+		trials := 100
+
+		Specify("adding should add the values and leave the index unchanged", func() {
+			var index, value1, value2, val, ind, sum secp256k1.Secp256k1N
+			var share1, share2, shareSum Share
+
+			for i := 0; i < trials; i++ {
+				index = secp256k1.RandomSecp256k1N()
+				value1 = secp256k1.RandomSecp256k1N()
+				value2 = secp256k1.RandomSecp256k1N()
+				sum.Add(&value1, &value2)
+				sum.Normalize()
+
+				// The resulting share should have the values added and the
+				// same index.
+				share1 = NewShare(index, value1)
+				share2 = NewShare(index, value2)
+				shareSum.Add(&share1, &share2)
+				val = shareSum.Value()
+				ind = shareSum.Index()
+				Expect(val.Eq(&sum)).To(BeTrue())
+				Expect(ind.Eq(&index)).To(BeTrue())
+
+				// Adding two shares with different indices should panic.
+				share1 = NewShare(secp256k1.RandomSecp256k1N(), value1)
+				Expect(func() { shareSum.Add(&share1, &share2) }).To(Panic())
 			}
 		})
 
-		It("should not contruct shares when k is too high", func() {
-			trials := 100
-			n := 20
-			maxK := 100
-
-			indices := sequentialIndices(n)
-			sharer := NewSharer(indices)
+		Specify("scaling should multiply the value and leave the index unchanged", func() {
+			var scale, value, index, val, ind, prod secp256k1.Secp256k1N
+			var share, shareScale Share
 
 			for i := 0; i < trials; i++ {
-				k := rand.Intn(maxK-n) + n + 1
-				secret := secp256k1.RandomSecp256k1N()
-				shares, err := sharer.Share(secret, k)
+				index = secp256k1.RandomSecp256k1N()
+				value = secp256k1.RandomSecp256k1N()
+				prod.Mul(&value, &scale)
 
-				Expect(shares).To(BeNil())
+				// The resulting share should have the value scaled and the
+				// same index.
+				share = NewShare(index, value)
+				shareScale.Scale(&share, &scale)
+				val = shareScale.Value()
+				ind = shareScale.Index()
+				Expect(val.Eq(&prod)).To(BeTrue())
+				Expect(ind.Eq(&index)).To(BeTrue())
+			}
+		})
+	})
+
+	//
+	// Sharer tests
+	//
+	// We will test the two failure branches of creating shares:
+	//
+	//	1. If k is larger than the number of indices, the function will return
+	//	an error.
+	//	2. If the destination slice is too small to hold all of the shares, the
+	//	function will panic.
+	//
+
+	Context("Sharer", func() {
+		trials := 100
+		n := 20
+
+		var indices []secp256k1.Secp256k1N
+		var sharer Sharer
+
+		BeforeEach(func() {
+			indices = randomIndices(n)
+			sharer = NewSharer(indices)
+		})
+
+		It("should return an error when k is larger than the number of indices (1)", func() {
+			maxK := 100
+			shares := make(Shares, n)
+
+			for i := 0; i < trials; i++ {
+				k := randRange(n+1, maxK)
+				secret := secp256k1.RandomSecp256k1N()
+				err := sharer.Share(&shares, secret, k)
+
 				Expect(err).To(HaveOccurred())
 			}
 		})
-	})
 
-	Context("when reconstructing a secret from shares", func() {
-		It("should reconstruct without error when all shares have valid indices", func() {
-			trials := 100
-			n := 20
-			var k int
-
-			indices := sequentialIndices(n)
-			reconstructor := NewReconstructor(indices)
-			shares := make(Shares, n)
-			zero := secp256k1.ZeroSecp256k1N()
-
-			for i := range shares {
-				shares[i] = NewShare(indices[i], zero)
-			}
-
+		It("should panic if the destination slice capacity is too small (2)", func() {
 			for i := 0; i < trials; i++ {
-				k = rand.Intn(n) + 1
-				shuffle(shares)
-				_, err := reconstructor.Open(shares[:k+rand.Intn(n-k+1)])
-
-				Expect(err).ToNot(HaveOccurred())
+				k := randRange(1, n)
+				secret := secp256k1.RandomSecp256k1N()
+				shares := make(Shares, rand.Intn(n))
+				Expect(func() { sharer.Share(&shares, secret, k) }).Should(Panic())
 			}
 		})
+	})
 
-		It("should not open when the number of shares is too high", func() {
-			trials := 100
-			n := 20
+	//
+	// Reconstructor tests
+	//
+	// We will test the four failure modes for reconstructing:
+	//
+	//	1. It should return an error when there are too many shares.
+	//	2. It should return and error when a share has an index that is not in
+	//	the index set.
+	//	3. It should return an error when two shares have the same index.
+	//	4. When doing a checked reconstruction, it should return an error if
+	//	the number of shares given is less than the specified k.
+	//
+
+	Context("Reconstructor", func() {
+		trials := 100
+		n := 20
+
+		var indices []secp256k1.Secp256k1N
+		var reconstructor Reconstructor
+
+		BeforeEach(func() {
+			indices = randomIndices(n)
+			reconstructor = NewReconstructor(indices)
+		})
+
+		It("should return an error when the number of shares is too high (1)", func() {
 			maxNumShares := 100
-
-			indices := sequentialIndices(n)
-			reconstructor := NewReconstructor(indices)
 			shares := make(Shares, maxNumShares)
 
 			for i := 0; i < trials; i++ {
-				numShares := rand.Intn(maxNumShares-n) + n + 1
+				numShares := randRange(n+1, maxNumShares)
 				shares = shares[:numShares]
-				secret, err := reconstructor.Open(shares)
+				_, err := reconstructor.Open(shares)
 
 				Expect(err).To(HaveOccurred())
-				Expect(secret.IsZero()).To(BeTrue())
 			}
 		})
 
-		It("should not open when there is a share with an out of range index", func() {
-			trials := 100
-			n := 20
-
-			indices := sequentialIndices(n)
-			reconstructor := NewReconstructor(indices)
-			shares := make(Shares, n)
-			zero := secp256k1.ZeroSecp256k1N()
-
+		var shares Shares
+		initShares := func() {
+			shares = make(Shares, n)
 			for i := range shares {
 				shares[i] = NewShare(indices[i], zero)
 			}
+		}
+
+		It("should return an error when there is a share with an out of range index (2)", func() {
+			initShares()
 
 			for i := 0; i < trials; i++ {
 				// Change one of the indices. It is possible that the random
@@ -150,53 +299,77 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			}
 		})
 
-		It("should not open when two shares have the same index", func() {
-			trials := 100
-			n := 20
-
-			indices := sequentialIndices(n)
-			reconstructor := NewReconstructor(indices)
-			shares := make(Shares, n)
-			one := secp256k1.OneSecp256k1N()
-			var newInd secp256k1.Secp256k1N
-
-			for i := range shares {
-				shares[i] = NewShare(indices[i], one)
-			}
+		It("should return an error when two shares have the same index (3)", func() {
+			initShares()
 
 			for i := 0; i < trials; i++ {
-				pos := rand.Intn(n)
-				newInd.Set(&one)
-				newInd.MulInt(rand.Intn(n) + 1)
-				for newInd.Uint64() == uint64(pos+1) {
-					newInd.Set(&one)
-					newInd.MulInt(rand.Intn(n) + 1)
-				}
-				shares[pos] = NewShare(newInd, one)
+				addDuplicateIndex(shares)
 				secret, err := reconstructor.Open(shares)
 
 				Expect(err).To(HaveOccurred())
 				Expect(secret.IsZero()).To(BeTrue())
 			}
 		})
+
+		It("checked open give an error if there are not enough shares, and no error otherwise (4)", func() {
+			var k, lowK, highK int
+
+			initShares()
+
+			for i := 0; i < trials; i++ {
+				k = randRange(1, n)
+				lowK = rand.Intn(k)
+				highK = randRange(k, n)
+
+				_, err := reconstructor.CheckedOpen(shares[:lowK], k)
+				Expect(err).To(HaveOccurred())
+
+				_, err = reconstructor.CheckedOpen(shares[:highK], k)
+				Expect(err).ToNot(HaveOccurred())
+			}
+		})
 	})
 })
+
+func BenchmarkShare(b *testing.B) {
+	n := 100
+	k := 33
+
+	indices := randomIndices(n)
+	shares := make(Shares, n)
+	sharer := NewSharer(indices)
+	secret := secp256k1.RandomSecp256k1N()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = sharer.Share(&shares, secret, k)
+	}
+}
 
 func BenchmarkOpen(b *testing.B) {
 	n := 100
 	k := 33
 
-	indices := sequentialIndices(n)
+	indices := randomIndices(n)
+	shares := make(Shares, n)
 	sharer := NewSharer(indices)
 	reconstructor := NewReconstructor(indices)
 	secret := secp256k1.RandomSecp256k1N()
-	shares, _ := sharer.Share(secret, k)
+	_ = sharer.Share(&shares, secret, k)
 	shuffle(shares)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = reconstructor.Open(shares[:k])
 	}
+}
+
+func randomIndices(n int) []secp256k1.Secp256k1N {
+	indices := make([]secp256k1.Secp256k1N, n)
+	for i := range indices {
+		indices[i] = secp256k1.RandomSecp256k1N()
+	}
+	return indices
 }
 
 func sequentialIndices(n int) []secp256k1.Secp256k1N {
@@ -214,4 +387,45 @@ func shuffle(shares Shares) {
 	rand.Shuffle(len(shares), func(i, j int) {
 		shares[i], shares[j] = shares[j], shares[i]
 	})
+}
+
+func addDuplicateIndex(shares Shares) {
+	// Pick two distinct array indices.
+	first, second := rand.Intn(len(shares)), rand.Intn(len(shares))
+	for first == second {
+		second = rand.Intn(len(shares))
+	}
+
+	// Set the second share to have the same index as the first.
+	shares[second] = NewShare(shares[first].Index(), shares[second].Value())
+}
+
+func sharesAreConsistent(
+	shares Shares,
+	secret secp256k1.Secp256k1N,
+	reconstructor *Reconstructor,
+	k, trials int,
+) bool {
+	for i := 0; i < trials; i++ {
+		shuffle(shares)
+		extra := randRange(0, len(shares)-k)
+		recon, err := reconstructor.Open(shares[:k+extra])
+		if err != nil || !recon.Eq(&secret) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func max(a, b int) int {
+	if a <= b {
+		return b
+	}
+	return a
+}
+
+// Returns a random number x such that lower <= x <= upper.
+func randRange(lower, upper int) int {
+	return rand.Intn(upper+1-lower) + lower
 }
