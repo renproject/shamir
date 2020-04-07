@@ -68,6 +68,8 @@ func (s *Share) Scale(other *Share, scale *secp256k1.Secp256k1N) {
 // A Sharer is responsible for creating Shamir sharings of secrets. A Sharer
 // instance is bound to a specific set of indices; it can only create sharings
 // of a secret for the set of players defined by these indices.
+//
+// NOTE: This struct is not safe for concurrent use.
 type Sharer struct {
 	indices []secp256k1.Secp256k1N
 	coeffs  []secp256k1.Secp256k1N
@@ -150,6 +152,8 @@ func polyEval(y, x *secp256k1.Secp256k1N, coeffs []secp256k1.Secp256k1N) {
 // A Reconstructor is responsible for reconstructing shares into their
 // corresponding secret. Each instance can only perform reconstructions for a
 // given fixed set of indices.
+//
+// NOTE: This struct is not safe for concurrent use.
 type Reconstructor struct {
 	indices    []secp256k1.Secp256k1N
 	fullProd   []secp256k1.Secp256k1N
