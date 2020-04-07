@@ -131,6 +131,8 @@ func (c *Commitment) evaluate(eval *curve.Point, index *secp256k1.Secp256k1N) {
 // different group element h for the Pedersen commitment scheme, and as such
 // can by used for any verifiable sharings using this pedersen commitment
 // scheme, but cannot be used for different choices of h once constructed.
+//
+// NOTE: This struct is not safe for concurrent use.
 type VSSChecker struct {
 	h curve.Point
 
@@ -163,6 +165,8 @@ func (checker *VSSChecker) IsValid(c *Commitment, vshare *VerifiableShare) bool 
 // A VSSharer is capable of creating a verifiable sharing of a secret, which is
 // just a normal Shamir sharing but with the addition of a commitment which is
 // a collection of commitments to each of the coefficients of the sharing.
+//
+// NOTE: This struct is not safe for concurrent use.
 type VSSharer struct {
 	sharer Sharer
 	h      curve.Point
