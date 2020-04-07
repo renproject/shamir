@@ -133,7 +133,12 @@ func (sharer *Sharer) setRandomCoeffs(secret secp256k1.Secp256k1N, k int) {
 // and stores the result in y. Modifies y, but leaves x and coeffs unchanged.
 // Normalizes y, so this this is not neccesary to do manually after calling
 // this function.
+//
+// Panics: This function assumes that len(coeffs) is at least 1 and not nil. If
+// it is not, it will panic. It does not make sense to call this function if
+// coeffs is the empty (or nil) slice.
 func polyEval(y, x *secp256k1.Secp256k1N, coeffs []secp256k1.Secp256k1N) {
+	// NOTE: This will panic if len(coeffs) is less than 1 or if coeffs is nil.
 	y.Set(&coeffs[len(coeffs)-1])
 	for i := len(coeffs) - 2; i >= 0; i-- {
 		y.Mul(y, x)
