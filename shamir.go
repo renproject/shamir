@@ -101,6 +101,8 @@ func (sharer *Sharer) Share(dst *Shares, secret secp256k1.Secp256k1N, k int) err
 	sharer.setRandomCoeffs(secret, k)
 
 	// Set shares
+	// NOTE: This panics if the destination slice does not have the required
+	// capacity.
 	*dst = (*dst)[:len(sharer.indices)]
 	var eval secp256k1.Secp256k1N
 	for i, ind := range sharer.indices {
