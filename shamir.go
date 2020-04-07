@@ -68,6 +68,8 @@ func (s *Share) Scale(other *Share, scale *secp256k1.Secp256k1N) {
 // A Sharer is responsible for creating Shamir sharings of secrets. A Sharer
 // instance is bound to a specific set of indices; it can only create sharings
 // of a secret for the set of players defined by these indices.
+//
+// NOTE: This struct is not safe for concurrent use.
 type Sharer struct {
 	indices []secp256k1.Secp256k1N
 	coeffs  []secp256k1.Secp256k1N
@@ -75,8 +77,10 @@ type Sharer struct {
 
 // NewSharer constructs a new Sharer object from the given set of indices.
 func NewSharer(indices []secp256k1.Secp256k1N) Sharer {
+	copiedIndices := make([]secp256k1.Secp256k1N, len(indices))
+	copy(copiedIndices, indices)
 	coeffs := make([]secp256k1.Secp256k1N, len(indices))
-	return Sharer{indices, coeffs}
+	return Sharer{indices: copiedIndices, coeffs: coeffs}
 }
 
 // Share creates Shamir shares for the given secret at the given threshold, and
@@ -87,7 +91,7 @@ func NewSharer(indices []secp256k1.Secp256k1N) Sharer {
 //
 // Panics: This function will panic if the destination shares slice has a
 // capacity less than n (the number of indices).
-func (sharer *Sharer) Share(shares *Shares, secret secp256k1.Secp256k1N, k int) error {
+func (sharer *Sharer) Share(dst *Shares, secret secp256k1.Secp256k1N, k int) error {
 	if k > len(sharer.indices) {
 		return fmt.Errorf(
 			"reconstruction threshold too large: expected k <= %v, got k = %v",
@@ -99,12 +103,14 @@ func (sharer *Sharer) Share(shares *Shares, secret secp256k1.Secp256k1N, k int) 
 	sharer.setRandomCoeffs(secret, k)
 
 	// Set shares
-	*shares = (*shares)[:len(sharer.indices)]
+	// NOTE: This panics if the destination slice does not have the required
+	// capacity.
+	*dst = (*dst)[:len(sharer.indices)]
 	var eval secp256k1.Secp256k1N
 	for i, ind := range sharer.indices {
 		polyEval(&eval, &ind, sharer.coeffs)
-		(*shares)[i].index = ind
-		(*shares)[i].value = eval
+		(*dst)[i].index = ind
+		(*dst)[i].value = eval
 	}
 
 	return nil
@@ -112,9 +118,14 @@ func (sharer *Sharer) Share(shares *Shares, secret secp256k1.Secp256k1N, k int) 
 
 // Sets the coefficients of the Sharer to represent a random degree k-1
 // polynomial with constant term equal to the given secret.
+//
+// Panics: This function will panic if k is greater than len(sharer.coeffs).
 func (sharer *Sharer) setRandomCoeffs(secret secp256k1.Secp256k1N, k int) {
 	sharer.coeffs = sharer.coeffs[:k]
 	sharer.coeffs[0] = secret
+
+	// NOTE: If k is greater than len(sharer.coeffs), then this loop will panic
+	// when i > len(sharer.coeffs).
 	for i := 1; i < k; i++ {
 		sharer.coeffs[i] = secp256k1.RandomSecp256k1N()
 	}
@@ -124,7 +135,12 @@ func (sharer *Sharer) setRandomCoeffs(secret secp256k1.Secp256k1N, k int) {
 // and stores the result in y. Modifies y, but leaves x and coeffs unchanged.
 // Normalizes y, so this this is not neccesary to do manually after calling
 // this function.
+//
+// Panics: This function assumes that len(coeffs) is at least 1 and not nil. If
+// it is not, it will panic. It does not make sense to call this function if
+// coeffs is the empty (or nil) slice.
 func polyEval(y, x *secp256k1.Secp256k1N, coeffs []secp256k1.Secp256k1N) {
+	// NOTE: This will panic if len(coeffs) is less than 1 or if coeffs is nil.
 	y.Set(&coeffs[len(coeffs)-1])
 	for i := len(coeffs) - 2; i >= 0; i-- {
 		y.Mul(y, x)
@@ -136,6 +152,8 @@ func polyEval(y, x *secp256k1.Secp256k1N, coeffs []secp256k1.Secp256k1N) {
 // A Reconstructor is responsible for reconstructing shares into their
 // corresponding secret. Each instance can only perform reconstructions for a
 // given fixed set of indices.
+//
+// NOTE: This struct is not safe for concurrent use.
 type Reconstructor struct {
 	indices    []secp256k1.Secp256k1N
 	fullProd   []secp256k1.Secp256k1N
