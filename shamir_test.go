@@ -424,3 +424,8 @@ func max(a, b int) int {
 	}
 	return a
 }
+
+// Returns a random number x such that lower <= x <= upper.
+func randRange(lower, upper int) int {
+	return rand.Intn(upper+1-lower) + lower
+}
