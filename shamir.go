@@ -82,7 +82,8 @@ func NewSharer(indices []secp256k1.Secp256k1N) Sharer {
 // Share creates Shamir shares for the given secret at the given threshold, and
 // stores them in the given destination slice. In the returned Shares, there
 // will be one share for each index in the indices that were used to construct
-// the Sharer.
+// the Sharer. If k is larger than the number of indices, in which case it
+// would be impossible to reconstruct the secret, an error is returned.
 //
 // Panics: This function will panic if the destination shares slice has a
 // capacity less than n (the number of indices).
@@ -157,6 +158,7 @@ func NewReconstructor(indices []secp256k1.Secp256k1N) Reconstructor {
 	for i := range indices {
 		fullProd[i] = secp256k1.OneSecp256k1N()
 		neg.Neg(&indices[i], 1)
+		neg.Normalize()
 		for j := range indices {
 			if i == j {
 				continue
