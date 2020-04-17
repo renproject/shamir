@@ -18,6 +18,47 @@ func (p Point) String() string {
 	return fmt.Sprintf("(%v, %v)", p.x, p.y)
 }
 
+func (p *Point) Bytes() [64]byte {
+	var bs [64]byte
+	xBytes := p.x.Bytes()
+	for i := 32 - len(xBytes); i < 32; i++ {
+		bs[i] = xBytes[i]
+	}
+	yBytes := p.y.Bytes()
+	for i := 64 - len(yBytes); i < 64; i++ {
+		bs[i] = xBytes[i]
+	}
+
+	return bs
+}
+
+func FromBytes(bs [64]byte) Point {
+	p := Point{
+		x: big.NewInt(0),
+		y: big.NewInt(0),
+	}
+
+	i := 0
+	for _, b := range bs {
+		if b != 0 {
+			break
+		}
+		i++
+	}
+	p.x.SetBytes(bs[i:32])
+
+	i = 32
+	for _, b := range bs[32:] {
+		if b != 0 {
+			break
+		}
+		i++
+	}
+	p.x.SetBytes(bs[i:64])
+
+	return p
+}
+
 // New constructs a new curve point.
 func New() Point {
 	x, y := big.NewInt(0), big.NewInt(0)
