@@ -32,7 +32,7 @@ func (p *Point) Bytes() [64]byte {
 	return bs
 }
 
-func FromBytes(bs [64]byte) Point {
+func FromBytes(bs []byte) Point {
 	p := Point{
 		x: big.NewInt(0),
 		y: big.NewInt(0),

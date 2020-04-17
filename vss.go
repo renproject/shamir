@@ -63,6 +63,25 @@ type Commitment struct {
 	points []curve.Point
 }
 
+func (c *Commitment) Bytes() []byte {
+	bs := make([]byte, 64*len(c.points))
+	for i, p := range c.points {
+		pbs := p.Bytes()
+		copy(bs[i*64:(i+1)*64], pbs[:])
+	}
+
+	return bs
+}
+
+func CommitmentFromBytes(bs []byte) Commitment {
+	points := make([]curve.Point, len(bs)/64)
+	for i := range points {
+		points[i] = curve.FromBytes(bs[i*64 : (i+1)*64])
+	}
+
+	return Commitment{points}
+}
+
 // NewCommitmentWithCapacity creates a new Commitment with the given capacity.
 // This capacity represents the maximum reconstruction threshold, k, that this
 // commitment can be used for.
