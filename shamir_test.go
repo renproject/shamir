@@ -1,11 +1,13 @@
 package shamir_test
 
 import (
+	"bytes"
 	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/renproject/secp256k1-go"
+	"github.com/renproject/surge"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -190,6 +192,45 @@ var _ = Describe("Shamir Secret Sharing", func() {
 				Expect(val.Eq(&prod)).To(BeTrue())
 				Expect(ind.Eq(&index)).To(BeTrue())
 			}
+		})
+
+		//
+		// Marshaling
+		//
+
+		It("should be the same after marshalling to and from binary", func() {
+			var share1, share2 Share
+			var bs [64]byte
+
+			for i := 0; i < trials; i++ {
+				share1 = NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N())
+				share1.GetBytes(bs[:])
+				share2.SetBytes(bs[:])
+				Expect(share1.Eq(&share2)).To(BeTrue())
+			}
+		})
+
+		It("should be the same after marshalling and unmarshalling with surge", func() {
+			var share1, share2 Share
+
+			for i := 0; i < trials; i++ {
+				share1 = NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N())
+				bs, err := surge.ToBinary(&share1)
+				Expect(err).ToNot(HaveOccurred())
+				err = surge.FromBinary(bs[:], &share2)
+				Expect(share1.Eq(&share2)).To(BeTrue())
+			}
+		})
+
+		It("should error if unmarshalling fails", func() {
+			var bs [64]byte
+
+			share := NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N())
+			max := rand.Intn(64)
+			buf := bytes.NewBuffer(bs[:max])
+			n, err := share.Unmarshal(buf, 64)
+			Expect(err).To(HaveOccurred())
+			Expect(n).To(Equal(64 - max))
 		})
 	})
 

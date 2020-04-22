@@ -1,6 +1,9 @@
 package shamir
 
 import (
+	"encoding/binary"
+	"io"
+
 	"github.com/renproject/secp256k1-go"
 	"github.com/renproject/shamir/curve"
 )
@@ -21,6 +24,55 @@ type VerifiableShare struct {
 // needed. In general, shares should be constructed by using a VSSharer.
 func NewVerifiableShare(share Share, r secp256k1.Secp256k1N) VerifiableShare {
 	return VerifiableShare{share, r}
+}
+
+// GetBytes serialises the verifiable share into bytes and writes these bytes
+// into the given destination slice. A verifiable serialises to 96 bytes.
+//
+// Panics: If the destination slice has length less than 96, this function will
+// panic.
+func (vs *VerifiableShare) GetBytes(dst []byte) {
+	// Byte format:
+	//
+	// - First 64 bytes: serialised Shamir share.
+	// - Last 32 bytes: decommitment value in big endian format.
+
+	vs.share.GetBytes(dst[:64])
+	vs.r.GetB32(dst[64:])
+}
+
+// SetBytes sets the caller from the given bytes. The format of these bytes is
+// that determined by the GetBytes method.
+func (vs *VerifiableShare) SetBytes(bs []byte) {
+	vs.share.SetBytes(bs[:64])
+	vs.r.SetB32(bs[64:])
+}
+
+// Eq returns true if the two verifiable shares are equal, and false otherwise.
+func (vs *VerifiableShare) Eq(other *VerifiableShare) bool {
+	return vs.share.Eq(&other.share) && vs.r.Eq(&other.r)
+}
+
+// SizeHint implements the surge.SizeHinter interface.
+func (vs *VerifiableShare) SizeHint() int { return 64 }
+
+// Marshal implements the surge.Marshaler interface.
+func (vs *VerifiableShare) Marshal(w io.Writer, m int) (int, error) {
+	var bs [96]byte
+	vs.GetBytes(bs[:])
+	n, err := w.Write(bs[:])
+	return m - n, err
+}
+
+// Unmarshal implements the surge.Unmarshaler interface.
+func (vs *VerifiableShare) Unmarshal(r io.Reader, m int) (int, error) {
+	var bs [96]byte
+	n, err := io.ReadFull(r, bs[:])
+	if err != nil {
+		return m - n, err
+	}
+	vs.SetBytes(bs[:])
+	return m - n, err
 }
 
 // Share returns the underlying Shamir share of the verifiable share.
@@ -63,23 +115,99 @@ type Commitment struct {
 	points []curve.Point
 }
 
-func (c *Commitment) Bytes() []byte {
-	bs := make([]byte, 64*len(c.points))
-	for i, p := range c.points {
-		pbs := p.Bytes()
-		copy(bs[i*64:(i+1)*64], pbs[:])
+// Eq returns true if the two commitments are equal (each curve point is
+// equal), and false otherwise.
+func (c *Commitment) Eq(other *Commitment) bool {
+	if len(c.points) != len(other.points) {
+		return false
 	}
 
-	return bs
+	for i := range c.points {
+		if !c.points[i].Eq(&other.points[i]) {
+			return false
+		}
+	}
+
+	return true
 }
 
-func CommitmentFromBytes(bs []byte) Commitment {
-	points := make([]curve.Point, len(bs)/64)
-	for i := range points {
-		points[i] = curve.FromBytes(bs[i*64 : (i+1)*64])
+// Len returns the number of curve points in the commitment. This is equal to
+// the reconstruction threshold of the associated verifiable sharing.
+func (c *Commitment) Len() int {
+	return len(c.points)
+}
+
+// GetBytes serialises the commitment into bytes and writes these bytes into
+// the given destination slice.
+//
+// Panics: If the destination slice has length smaller than required, this
+// function may panic. The exact length requirement can be obtained from the
+// SizeHint method.
+func (c *Commitment) GetBytes(dst []byte) {
+	// Byte format:
+	//
+	// - First 4 bytes: slice length in big endian as a uint32.
+	// - Remaining bytes: successive groups of 64 bytes containing the
+	// serialised curve points.
+
+	binary.BigEndian.PutUint32(dst[:4], uint32(len(c.points)))
+	for i, p := range c.points {
+		p.GetBytes(dst[64*i+4:])
+	}
+}
+
+// SetBytes sets the caller from the given bytes. The format of these bytes is
+// that determined by the GetBytes method.
+func (c *Commitment) SetBytes(bs []byte) {
+	nPoints := int(binary.BigEndian.Uint32(bs[:4]))
+	c.points = c.points[:nPoints]
+	for i := 0; i < nPoints; i++ {
+		c.points[i].SetBytes(bs[64*i+4:])
+	}
+}
+
+// SizeHint implements the surge.SizeHinter interface.
+func (c *Commitment) SizeHint() int { return 64*len(c.points) + 4 }
+
+// Marshal implements the surge.Marshaler interface.
+func (c *Commitment) Marshal(w io.Writer, m int) (int, error) {
+	var bs [4]byte
+
+	binary.BigEndian.PutUint32(bs[:], uint32(len(c.points)))
+	n, err := w.Write(bs[:])
+	m -= n
+	if err != nil {
+		return m, err
 	}
 
-	return Commitment{points}
+	for i := range c.points {
+		m, err = c.points[i].Marshal(w, m)
+		if err != nil {
+			return m, err
+		}
+	}
+	return m, nil
+}
+
+// Unmarshal implements the surge.Unmarshaler interface.
+func (c *Commitment) Unmarshal(r io.Reader, m int) (int, error) {
+	var bs [4]byte
+
+	n, err := io.ReadFull(r, bs[:])
+	m -= n
+	if err != nil {
+		return m, err
+	}
+	l := binary.BigEndian.Uint32(bs[:])
+	c.points = c.points[:l]
+
+	for i := 0; i < int(l); i++ {
+		m, err = c.points[i].Unmarshal(r, m)
+		if err != nil {
+			return m, err
+		}
+	}
+	return m, nil
 }
 
 // NewCommitmentWithCapacity creates a new Commitment with the given capacity.
@@ -87,6 +215,10 @@ func CommitmentFromBytes(bs []byte) Commitment {
 // commitment can be used for.
 func NewCommitmentWithCapacity(k int) Commitment {
 	points := make([]curve.Point, k)
+	for i := range points {
+		points[i] = curve.New()
+	}
+	points = points[:0]
 	return Commitment{points}
 }
 

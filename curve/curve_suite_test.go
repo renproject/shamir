@@ -1,0 +1,13 @@
+package curve_test
+
+import (
+	"testing"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+)
+
+func TestCurve(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Curve Suite")
+}

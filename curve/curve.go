@@ -2,6 +2,7 @@ package curve
 
 import (
 	"fmt"
+	"io"
 	"math/big"
 
 	ec "github.com/ethereum/go-ethereum/crypto/secp256k1"
@@ -18,28 +19,39 @@ func (p Point) String() string {
 	return fmt.Sprintf("(%v, %v)", p.x, p.y)
 }
 
-func (p *Point) Bytes() [64]byte {
-	var bs [64]byte
-	xBytes := p.x.Bytes()
-	for i := 32 - len(xBytes); i < 32; i++ {
-		bs[i] = xBytes[i]
-	}
-	yBytes := p.y.Bytes()
-	for i := 64 - len(yBytes); i < 64; i++ {
-		bs[i] = xBytes[i]
-	}
+// GetBytes serialises the curve point into bytes and writes these bytes into
+// the given destination slice. A curve point serialises to 64 bytes.
+//
+// Panics: If the destination slice has length less than 64, this function may
+// panic.
+func (p *Point) GetBytes(dst []byte) {
+	// Byte format:
+	//
+	// - First 32 bytes: big endian bytes of the x coordinate, left padded with
+	// zeros.
+	// - Second 32 bytes: big endian bytes of the y coordinate, left padded
+	// with zeros.
 
-	return bs
+	xBytes := p.x.Bytes()
+	yBytes := p.y.Bytes()
+	copy(dst[32-len(xBytes):], xBytes)
+	copy(dst[64-len(yBytes):], yBytes)
+
+	// Make sure the remaining bytes of the slice are zeroed.
+	for i := range dst[:32-len(xBytes)] {
+		dst[i] = 0
+	}
+	offset := 32
+	for i := range dst[offset : 64-len(yBytes)] {
+		dst[offset+i] = 0
+	}
 }
 
-func FromBytes(bs []byte) Point {
-	p := Point{
-		x: big.NewInt(0),
-		y: big.NewInt(0),
-	}
-
+// SetBytes sets the caller from the given bytes. The format of these bytes is
+// that determined by the GetBytes method.
+func (p *Point) SetBytes(bs []byte) {
 	i := 0
-	for _, b := range bs {
+	for _, b := range bs[:32] {
 		if b != 0 {
 			break
 		}
@@ -54,9 +66,29 @@ func FromBytes(bs []byte) Point {
 		}
 		i++
 	}
-	p.x.SetBytes(bs[i:64])
+	p.y.SetBytes(bs[i:64])
+}
 
-	return p
+// SizeHint implements the surge.SizeHinter interface.
+func (p *Point) SizeHint() int { return 64 }
+
+// Marshal implements the surge.Marshaler interface.
+func (p *Point) Marshal(w io.Writer, m int) (int, error) {
+	var bs [64]byte
+	p.GetBytes(bs[:])
+	n, err := w.Write(bs[:])
+	return m - n, err
+}
+
+// Unmarshal implements the surge.Unmarshaler interface.
+func (p *Point) Unmarshal(r io.Reader, m int) (int, error) {
+	var bs [64]byte
+	n, err := io.ReadFull(r, bs[:])
+	if err != nil {
+		return m - n, err
+	}
+	p.SetBytes(bs[:])
+	return m - n, err
 }
 
 // New constructs a new curve point.
@@ -88,6 +120,7 @@ func (p *Point) Eq(other *Point) bool {
 // curve by the scalar represented by the given bytes in big endian format, and
 // stores the result in the caller.
 func (p *Point) BaseExp(bs [32]byte) {
+	// FIXME: Handle the case where the exponent is zero.
 	p.x, p.y = ec.S256().ScalarBaseMult(bs[:])
 }
 

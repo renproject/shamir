@@ -1,17 +1,20 @@
 package shamir_test
 
 import (
+	"bytes"
+	"encoding/binary"
 	"math/rand"
 	"testing"
 	"time"
 
-	. "github.com/renproject/shamir"
+	"github.com/renproject/secp256k1-go"
 	"github.com/renproject/shamir/curve"
-	. "github.com/renproject/shamir/testutil"
+	"github.com/renproject/surge"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/renproject/secp256k1-go"
+	. "github.com/renproject/shamir"
+	. "github.com/renproject/shamir/testutil"
 )
 
 // The key properties of verifiable secret sharing is that it is the same as
@@ -379,6 +382,154 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 		err := vsharer.Share(nil, nil, secp256k1.Secp256k1N{}, n+1)
 		Expect(err).To(HaveOccurred())
+	})
+
+	Context("Commitments", func() {
+		const maxK int = 10
+
+		var n, trials int
+		var com, com1, com2 Commitment
+		var shares VerifiableShares
+		var indices []secp256k1.Secp256k1N
+		var vsharer VSSharer
+
+		BeforeEach(func() {
+			trials = 100
+			n = 20
+			com = NewCommitmentWithCapacity(maxK)
+			com1 = NewCommitmentWithCapacity(maxK)
+			com2 = NewCommitmentWithCapacity(maxK)
+			shares = make(VerifiableShares, n)
+			indices = RandomIndices(n)
+			vsharer = NewVSSharer(indices, h)
+		})
+
+		Specify("should be unequal when they have different lengths", func() {
+			k := rand.Intn(maxK) + 1
+			_ = vsharer.Share(&shares, &com1, secp256k1.RandomSecp256k1N(), k)
+
+			Expect(com1.Eq(&com2)).To(BeFalse())
+		})
+
+		Specify("should be unequal when they have different curve points", func() {
+			k := rand.Intn(maxK) + 1
+			_ = vsharer.Share(&shares, &com1, secp256k1.RandomSecp256k1N(), k)
+			_ = vsharer.Share(&shares, &com2, secp256k1.RandomSecp256k1N(), k)
+
+			Expect(com1.Eq(&com2)).To(BeFalse())
+		})
+
+		Specify("marshalling a commitment to and from binary should leave it unchanged", func() {
+			var bs [64*maxK + 4]byte
+
+			for i := 0; i < trials; i++ {
+				k := rand.Intn(maxK) + 1
+				_ = vsharer.Share(&shares, &com1, secp256k1.RandomSecp256k1N(), k)
+				nBytes := 64*com1.Len() + 4
+				com1.GetBytes(bs[:nBytes])
+				com2.SetBytes(bs[:nBytes])
+				Expect(com1.Eq(&com2)).To(BeTrue())
+			}
+		})
+
+		Specify("marshalling and unmarshalling a commitment using surge should leave it unchanged", func() {
+			for i := 0; i < trials; i++ {
+				k := rand.Intn(maxK) + 1
+				_ = vsharer.Share(&shares, &com1, secp256k1.RandomSecp256k1N(), k)
+				bs, err := surge.ToBinary(&com1)
+				Expect(err).ToNot(HaveOccurred())
+				surge.FromBinary(bs, &com2)
+				Expect(com1.Eq(&com2)).To(BeTrue())
+			}
+		})
+
+		It("should error if marshalling fails", func() {
+			k := rand.Intn(maxK) + 1
+			_ = vsharer.Share(&shares, &com, secp256k1.RandomSecp256k1N(), k)
+
+			// Error marshalling slice length.
+			max := rand.Intn(4)
+			w := NewBoundedWriter(max)
+			rem, err := com.Marshal(&w, com.SizeHint())
+			Expect(err).To(HaveOccurred())
+			Expect(rem).To(Equal(com.SizeHint() - max))
+
+			// Error marshalling a curve point.
+			max = RandRange(4, com.SizeHint()-1)
+			w = NewBoundedWriter(max)
+			rem, err = com.Marshal(&w, com.SizeHint())
+			Expect(err).To(HaveOccurred())
+			Expect(rem).To(Equal(com.SizeHint() - max))
+		})
+
+		It("should error if unmarshalling fails", func() {
+			var bs [64 * maxK]byte
+			k := rand.Intn(maxK) + 1
+			_ = vsharer.Share(&shares, &com, secp256k1.RandomSecp256k1N(), k)
+
+			// Error unmarshalling slice length.
+			max := rand.Intn(4)
+			buf := bytes.NewBuffer(bs[:max])
+			rem, err := com.Unmarshal(buf, com.SizeHint())
+			Expect(err).To(HaveOccurred())
+			Expect(rem).To(Equal(com.SizeHint() - max))
+
+			// Error unmarshalling a curve point.
+			max = RandRange(4, com.SizeHint()-1)
+			binary.BigEndian.PutUint32(bs[:4], uint32(maxK))
+			buf = bytes.NewBuffer(bs[:max])
+			size := (max / 64) * 64
+			rem, err = com.Unmarshal(buf, size)
+			Expect(err).To(HaveOccurred())
+			Expect(rem).To(Equal(size - max))
+		})
+	})
+
+	Context("Verifiable shares", func() {
+		trials := 1000
+		It("should be the same after marshalling to and from binary", func() {
+			var share1, share2 VerifiableShare
+			var bs [96]byte
+
+			for i := 0; i < trials; i++ {
+				share1 = NewVerifiableShare(
+					NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N()),
+					secp256k1.RandomSecp256k1N(),
+				)
+				share1.GetBytes(bs[:])
+				share2.SetBytes(bs[:])
+				Expect(share1.Eq(&share2)).To(BeTrue())
+			}
+		})
+
+		It("should be the same after marshalling and unmarshalling with surge", func() {
+			var share1, share2 VerifiableShare
+
+			for i := 0; i < trials; i++ {
+				share1 = NewVerifiableShare(
+					NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N()),
+					secp256k1.RandomSecp256k1N(),
+				)
+				bs, err := surge.ToBinary(&share1)
+				Expect(err).ToNot(HaveOccurred())
+				err = surge.FromBinary(bs[:], &share2)
+				Expect(share1.Eq(&share2)).To(BeTrue())
+			}
+		})
+
+		It("should error if unmarshalling fails", func() {
+			var bs [96]byte
+
+			share := NewVerifiableShare(
+				NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N()),
+				secp256k1.RandomSecp256k1N(),
+			)
+			max := rand.Intn(96)
+			buf := bytes.NewBuffer(bs[:max])
+			n, err := share.Unmarshal(buf, 96)
+			Expect(err).To(HaveOccurred())
+			Expect(n).To(Equal(96 - max))
+		})
 	})
 })
 
