@@ -147,9 +147,11 @@ var _ = Describe("Shamir Secret Sharing", func() {
 	Context("Shares", func() {
 		trials := 100
 
+		var bs [64]byte
+		var share, share1, share2, shareSum, shareScale Share
+
 		Specify("adding should add the values and leave the index unchanged", func() {
 			var index, value1, value2, val, ind, sum secp256k1.Secp256k1N
-			var share1, share2, shareSum Share
 
 			for i := 0; i < trials; i++ {
 				index = secp256k1.RandomSecp256k1N()
@@ -176,7 +178,6 @@ var _ = Describe("Shamir Secret Sharing", func() {
 
 		Specify("scaling should multiply the value and leave the index unchanged", func() {
 			var scale, value, index, val, ind, prod secp256k1.Secp256k1N
-			var share, shareScale Share
 
 			for i := 0; i < trials; i++ {
 				index = secp256k1.RandomSecp256k1N()
@@ -199,9 +200,6 @@ var _ = Describe("Shamir Secret Sharing", func() {
 		//
 
 		It("should be the same after marshalling to and from binary", func() {
-			var share1, share2 Share
-			var bs [64]byte
-
 			for i := 0; i < trials; i++ {
 				share1 = NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N())
 				share1.GetBytes(bs[:])
@@ -211,8 +209,6 @@ var _ = Describe("Shamir Secret Sharing", func() {
 		})
 
 		It("should be the same after marshalling and unmarshalling with surge", func() {
-			var share1, share2 Share
-
 			for i := 0; i < trials; i++ {
 				share1 = NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N())
 				bs, err := surge.ToBinary(&share1)
@@ -223,14 +219,25 @@ var _ = Describe("Shamir Secret Sharing", func() {
 		})
 
 		It("should error if unmarshalling fails", func() {
-			var bs [64]byte
+			for i := 0; i < trials; i++ {
+				share := NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N())
+				max := rand.Intn(64)
+				buf := bytes.NewBuffer(bs[:max])
+				n, err := share.Unmarshal(buf, 64)
+				Expect(err).To(HaveOccurred())
+				Expect(n).To(Equal(64 - max))
+			}
+		})
 
-			share := NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N())
-			max := rand.Intn(64)
-			buf := bytes.NewBuffer(bs[:max])
-			n, err := share.Unmarshal(buf, 64)
-			Expect(err).To(HaveOccurred())
-			Expect(n).To(Equal(64 - max))
+		It("should error if unmarshalling with remaining bytes less than 64", func() {
+			for i := 0; i < trials; i++ {
+				share := NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N())
+				max := rand.Intn(64)
+				buf := bytes.NewBuffer(bs[:])
+				n, err := share.Unmarshal(buf, max)
+				Expect(err).To(HaveOccurred())
+				Expect(n).To(Equal(max))
+			}
 		})
 	})
 

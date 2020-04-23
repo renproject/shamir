@@ -1,12 +1,14 @@
 package curve
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
 
 	ec "github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/renproject/secp256k1-go"
+	"github.com/renproject/surge"
 )
 
 // Point represents a point on the secp256k1 elliptice curve.
@@ -81,14 +83,27 @@ func (p *Point) Marshal(w io.Writer, m int) (int, error) {
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.
+//
+// NOTE: If the data does not represent a point on the elliptic curve, an error
+// will be returned.
 func (p *Point) Unmarshal(r io.Reader, m int) (int, error) {
+	if m < 64 {
+		return m, surge.ErrMaxBytesExceeded
+	}
+
+	// This will only ever read 64 bytes from the reader.
 	var bs [64]byte
 	n, err := io.ReadFull(r, bs[:])
 	if err != nil {
 		return m - n, err
 	}
+
+	// Set the point and make sure it is valid.
 	p.SetBytes(bs[:])
-	return m - n, err
+	if !p.IsOnCurve() {
+		return m - n, errors.New("point is not on the elliptic curve")
+	}
+	return m - n, nil
 }
 
 // New constructs a new curve point.
@@ -103,6 +118,12 @@ func New() Point {
 // NOTE: This function does not check that the point is actually on the curve.
 func NewFromCoords(x, y *big.Int) Point {
 	return Point{x, y}
+}
+
+// IsOnCurve returns true if the x and y coordinates of the caller lie on the
+// secp256k1 elliptic curve, and false otherwise.
+func (p *Point) IsOnCurve() bool {
+	return ec.S256().IsOnCurve(p.x, p.y)
 }
 
 // Set sets the calling curve point to be equal to the given curve point.

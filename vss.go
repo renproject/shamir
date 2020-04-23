@@ -2,10 +2,12 @@ package shamir
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 
 	"github.com/renproject/secp256k1-go"
 	"github.com/renproject/shamir/curve"
+	"github.com/renproject/surge"
 )
 
 // VerifiableShares is a alias for a slice of VerifiableShare(s).
@@ -54,7 +56,7 @@ func (vs *VerifiableShare) Eq(other *VerifiableShare) bool {
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (vs *VerifiableShare) SizeHint() int { return 64 }
+func (vs *VerifiableShare) SizeHint() int { return 96 }
 
 // Marshal implements the surge.Marshaler interface.
 func (vs *VerifiableShare) Marshal(w io.Writer, m int) (int, error) {
@@ -66,6 +68,9 @@ func (vs *VerifiableShare) Marshal(w io.Writer, m int) (int, error) {
 
 // Unmarshal implements the surge.Unmarshaler interface.
 func (vs *VerifiableShare) Unmarshal(r io.Reader, m int) (int, error) {
+	if m < 96 {
+		return m, surge.ErrMaxBytesExceeded
+	}
 	var bs [96]byte
 	n, err := io.ReadFull(r, bs[:])
 	if err != nil {
@@ -191,14 +196,29 @@ func (c *Commitment) Marshal(w io.Writer, m int) (int, error) {
 
 // Unmarshal implements the surge.Unmarshaler interface.
 func (c *Commitment) Unmarshal(r io.Reader, m int) (int, error) {
-	var bs [4]byte
+	if m < 4 {
+		return m, surge.ErrMaxBytesExceeded
+	}
 
+	var bs [4]byte
 	n, err := io.ReadFull(r, bs[:])
 	m -= n
 	if err != nil {
 		return m, err
 	}
+
+	// Number of curve points.
 	l := binary.BigEndian.Uint32(bs[:])
+	if m < int(l*64) {
+		return m, surge.ErrMaxBytesExceeded
+	}
+	if int(l) > cap(c.points) {
+		return m, fmt.Errorf(
+			"commitment too small for data: destination can hold %v points, data contains %v points",
+			cap(c.points),
+			l,
+		)
+	}
 	c.points = c.points[:l]
 
 	for i := 0; i < int(l); i++ {

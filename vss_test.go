@@ -387,101 +387,189 @@ var _ = Describe("Verifiable secret sharing", func() {
 	Context("Commitments", func() {
 		const maxK int = 10
 
-		var n, trials int
+		var trials int
 		var com, com1, com2 Commitment
-		var shares VerifiableShares
-		var indices []secp256k1.Secp256k1N
-		var vsharer VSSharer
+		var bs [64*maxK + 4]byte
 
 		BeforeEach(func() {
 			trials = 100
-			n = 20
 			com = NewCommitmentWithCapacity(maxK)
 			com1 = NewCommitmentWithCapacity(maxK)
 			com2 = NewCommitmentWithCapacity(maxK)
-			shares = make(VerifiableShares, n)
-			indices = RandomIndices(n)
-			vsharer = NewVSSharer(indices, h)
+		})
+
+		RandomCommitmentBytes := func(dst []byte, k int) {
+			var point curve.Point
+			binary.BigEndian.PutUint32(dst[:4], uint32(k))
+			for i := 0; i < k; i++ {
+				point = curve.Random()
+				point.GetBytes(dst[4+i*64:])
+			}
+		}
+
+		var RandomiseCommitment func(*Commitment, int)
+		{
+			var tmpBs [64*maxK + 4]byte
+			RandomiseCommitment = func(dst *Commitment, k int) {
+				RandomCommitmentBytes(tmpBs[:], k)
+				dst.SetBytes(tmpBs[:])
+			}
+		}
+
+		Specify("should be equal when they are the same", func() {
+			for i := 0; i < trials; i++ {
+				k := rand.Intn(maxK) + 1
+				RandomCommitmentBytes(bs[:], k)
+				com1.SetBytes(bs[:])
+				com2.SetBytes(bs[:])
+
+				Expect(com1.Eq(&com2)).To(BeTrue())
+			}
 		})
 
 		Specify("should be unequal when they have different lengths", func() {
-			k := rand.Intn(maxK) + 1
-			_ = vsharer.Share(&shares, &com1, secp256k1.RandomSecp256k1N(), k)
+			for i := 0; i < trials; i++ {
+				k1 := rand.Intn(maxK) + 1
+				k2 := k1
+				for k2 == k1 {
+					k2 = rand.Intn(maxK) + 1
+				}
+				RandomiseCommitment(&com1, k1)
+				RandomiseCommitment(&com2, k2)
 
-			Expect(com1.Eq(&com2)).To(BeFalse())
+				Expect(com1.Eq(&com2)).To(BeFalse())
+			}
 		})
 
 		Specify("should be unequal when they have different curve points", func() {
-			k := rand.Intn(maxK) + 1
-			_ = vsharer.Share(&shares, &com1, secp256k1.RandomSecp256k1N(), k)
-			_ = vsharer.Share(&shares, &com2, secp256k1.RandomSecp256k1N(), k)
-
-			Expect(com1.Eq(&com2)).To(BeFalse())
-		})
-
-		Specify("marshalling a commitment to and from binary should leave it unchanged", func() {
-			var bs [64*maxK + 4]byte
-
 			for i := 0; i < trials; i++ {
 				k := rand.Intn(maxK) + 1
-				_ = vsharer.Share(&shares, &com1, secp256k1.RandomSecp256k1N(), k)
-				nBytes := 64*com1.Len() + 4
-				com1.GetBytes(bs[:nBytes])
-				com2.SetBytes(bs[:nBytes])
-				Expect(com1.Eq(&com2)).To(BeTrue())
+				RandomiseCommitment(&com1, k)
+				RandomiseCommitment(&com2, k)
+
+				Expect(com1.Eq(&com2)).To(BeFalse())
 			}
 		})
 
-		Specify("marshalling and unmarshalling a commitment using surge should leave it unchanged", func() {
-			for i := 0; i < trials; i++ {
+		Context("Marhsalling", func() {
+			Specify("marshalling a commitment to and from binary should leave it unchanged", func() {
+				for i := 0; i < trials; i++ {
+					k := rand.Intn(maxK) + 1
+					RandomiseCommitment(&com1, k)
+					nBytes := 64*com1.Len() + 4
+					com1.GetBytes(bs[:nBytes])
+					com2.SetBytes(bs[:nBytes])
+					Expect(com1.Eq(&com2)).To(BeTrue())
+				}
+			})
+
+			Specify("marshalling and unmarshalling a commitment using surge should leave it unchanged", func() {
+				for i := 0; i < trials; i++ {
+					k := rand.Intn(maxK) + 1
+					RandomiseCommitment(&com1, k)
+					bs, err := surge.ToBinary(&com1)
+					Expect(err).ToNot(HaveOccurred())
+					surge.FromBinary(bs, &com2)
+					Expect(com1.Eq(&com2)).To(BeTrue())
+				}
+			})
+
+			It("should error if marshalling fails", func() {
 				k := rand.Intn(maxK) + 1
-				_ = vsharer.Share(&shares, &com1, secp256k1.RandomSecp256k1N(), k)
-				bs, err := surge.ToBinary(&com1)
-				Expect(err).ToNot(HaveOccurred())
-				surge.FromBinary(bs, &com2)
-				Expect(com1.Eq(&com2)).To(BeTrue())
-			}
-		})
+				RandomiseCommitment(&com, k)
 
-		It("should error if marshalling fails", func() {
-			k := rand.Intn(maxK) + 1
-			_ = vsharer.Share(&shares, &com, secp256k1.RandomSecp256k1N(), k)
+				// Error marshalling slice length.
+				max := rand.Intn(4)
+				w := NewBoundedWriter(max)
+				rem, err := com.Marshal(&w, com.SizeHint())
+				Expect(err).To(HaveOccurred())
+				Expect(rem).To(Equal(com.SizeHint() - max))
 
-			// Error marshalling slice length.
-			max := rand.Intn(4)
-			w := NewBoundedWriter(max)
-			rem, err := com.Marshal(&w, com.SizeHint())
-			Expect(err).To(HaveOccurred())
-			Expect(rem).To(Equal(com.SizeHint() - max))
+				// Error marshalling a curve point.
+				max = RandRange(4, com.SizeHint()-1)
+				w = NewBoundedWriter(max)
+				rem, err = com.Marshal(&w, com.SizeHint())
+				Expect(err).To(HaveOccurred())
+				Expect(rem).To(Equal(com.SizeHint() - max))
+			})
 
-			// Error marshalling a curve point.
-			max = RandRange(4, com.SizeHint()-1)
-			w = NewBoundedWriter(max)
-			rem, err = com.Marshal(&w, com.SizeHint())
-			Expect(err).To(HaveOccurred())
-			Expect(rem).To(Equal(com.SizeHint() - max))
-		})
+			It("should error if unmarshalling with not enough remaining bytes for the slice len", func() {
+				com := Commitment{}
+				size := com.SizeHint()
+				buf := bytes.NewBuffer(bs[:])
 
-		It("should error if unmarshalling fails", func() {
-			var bs [64 * maxK]byte
-			k := rand.Intn(maxK) + 1
-			_ = vsharer.Share(&shares, &com, secp256k1.RandomSecp256k1N(), k)
+				for i := 0; i < trials; i++ {
+					max := rand.Intn(size)
+					m, err := com.Unmarshal(buf, max)
+					Expect(err).To(HaveOccurred())
+					Expect(m).To(Equal(max))
+				}
+			})
 
-			// Error unmarshalling slice length.
-			max := rand.Intn(4)
-			buf := bytes.NewBuffer(bs[:max])
-			rem, err := com.Unmarshal(buf, com.SizeHint())
-			Expect(err).To(HaveOccurred())
-			Expect(rem).To(Equal(com.SizeHint() - max))
+			It("should error if unmarshalling with not enough remaining bytes for the curve points", func() {
+				for i := 0; i < trials; i++ {
+					k := rand.Intn(maxK) + 1
+					readCap := RandRange(4, 64*k+4-1)
+					dataLen := 64*k + 4
+					RandomCommitmentBytes(bs[:], k)
+					buf := bytes.NewBuffer(bs[:dataLen])
+					m, err := com.Unmarshal(buf, readCap)
+					Expect(err).To(HaveOccurred())
+					Expect(m).To(Equal(readCap - 4))
+				}
+			})
 
-			// Error unmarshalling a curve point.
-			max = RandRange(4, com.SizeHint()-1)
-			binary.BigEndian.PutUint32(bs[:4], uint32(maxK))
-			buf = bytes.NewBuffer(bs[:max])
-			size := (max / 64) * 64
-			rem, err = com.Unmarshal(buf, size)
-			Expect(err).To(HaveOccurred())
-			Expect(rem).To(Equal(size - max))
+			It("should error if unmarshalling with data that specifies slice len > cap", func() {
+				for i := 0; i < trials; i++ {
+					k := RandRange(maxK+1, 10*maxK)
+					readCap := 64*k + 4
+					binary.BigEndian.PutUint32(bs[:4], uint32(k))
+					buf := bytes.NewBuffer(bs[:])
+					m, err := com.Unmarshal(buf, readCap)
+					Expect(err).To(HaveOccurred())
+					Expect(m).To(Equal(readCap - 4))
+				}
+			})
+
+			It("should error if unmarshalling without enough data", func() {
+				for i := 0; i < trials; i++ {
+					k := rand.Intn(maxK) + 1
+					RandomiseCommitment(&com, k)
+
+					// Error unmarshalling slice length.
+					max := rand.Intn(4)
+					buf := bytes.NewBuffer(bs[:max])
+					rem, err := com.Unmarshal(buf, com.SizeHint())
+					Expect(err).To(HaveOccurred())
+					Expect(rem).To(Equal(com.SizeHint() - max))
+
+					// Error unmarshalling a curve point.
+					max = RandRange(4, com.SizeHint()-1)
+					binary.BigEndian.PutUint32(bs[:4], uint32(k))
+					buf = bytes.NewBuffer(bs[:max])
+					size := k*64 + 4
+					rem, err = com.Unmarshal(buf, size)
+					Expect(err).To(HaveOccurred())
+					Expect(rem).To(Equal(size - max))
+				}
+			})
+
+			Specify("unmarhsalling should return an error if the data doesn't represent a curve point", func() {
+				for i := 0; i < trials; i++ {
+					// The probability that a random 64 bytes will represent a
+					// point on the curve is negligible.
+					rand.Read(bs[:])
+
+					// Make sure that the slice length data is valid so that it
+					// can proceed to unmarshalling the curve points.
+					binary.BigEndian.PutUint32(bs[:4], uint32(maxK))
+
+					buf := bytes.NewBuffer(bs[:])
+					m, err := com.Unmarshal(buf, 64*maxK+4)
+					Expect(err).To(HaveOccurred())
+					Expect(m).To(Equal((maxK - 1) * 64))
+				}
+			})
 		})
 	})
 
@@ -517,18 +605,33 @@ var _ = Describe("Verifiable secret sharing", func() {
 			}
 		})
 
-		It("should error if unmarshalling fails", func() {
+		It("should error if unmarshalling with remaining bytes less than required", func() {
 			var bs [96]byte
+			share := VerifiableShare{}
+			size := share.SizeHint()
+			buf := bytes.NewBuffer(bs[:])
 
-			share := NewVerifiableShare(
-				NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N()),
-				secp256k1.RandomSecp256k1N(),
-			)
-			max := rand.Intn(96)
-			buf := bytes.NewBuffer(bs[:max])
-			n, err := share.Unmarshal(buf, 96)
-			Expect(err).To(HaveOccurred())
-			Expect(n).To(Equal(96 - max))
+			for i := 0; i < trials; i++ {
+				max := rand.Intn(size)
+				m, err := share.Unmarshal(buf, max)
+				Expect(err).To(HaveOccurred())
+				Expect(m).To(Equal(max))
+			}
+		})
+
+		It("should error if unmarshalling without enough data", func() {
+			var bs [96]byte
+			share := VerifiableShare{}
+			size := share.SizeHint()
+			readCap := size
+
+			for i := 0; i < trials; i++ {
+				dataLen := rand.Intn(size)
+				buf := bytes.NewBuffer(bs[:dataLen])
+				n, err := share.Unmarshal(buf, readCap)
+				Expect(err).To(HaveOccurred())
+				Expect(n).To(Equal(readCap - dataLen))
+			}
 		})
 	})
 })

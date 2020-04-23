@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/renproject/secp256k1-go"
+	"github.com/renproject/surge"
 )
 
 // Shares represents a slice of Shamir shares
@@ -61,6 +62,9 @@ func (s *Share) Marshal(w io.Writer, m int) (int, error) {
 
 // Unmarshal implements the surge.Unmarshaler interface.
 func (s *Share) Unmarshal(r io.Reader, m int) (int, error) {
+	if m < 64 {
+		return m, surge.ErrMaxBytesExceeded
+	}
 	var bs [64]byte
 	n, err := io.ReadFull(r, bs[:])
 	if err != nil {
