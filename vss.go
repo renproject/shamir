@@ -212,7 +212,7 @@ func (c *Commitment) Unmarshal(r io.Reader, m int) (int, error) {
 	if m < int(l*64) {
 		return m, surge.ErrMaxBytesExceeded
 	}
-	if int(l) > cap(c.points) {
+	if l > uint32(cap(c.points)) {
 		return m, fmt.Errorf(
 			"commitment too small for data: destination can hold %v points, data contains %v points",
 			cap(c.points),
