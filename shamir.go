@@ -2,8 +2,10 @@ package shamir
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/renproject/secp256k1-go"
+	"github.com/renproject/surge"
 )
 
 // Shares represents a slice of Shamir shares
@@ -18,6 +20,58 @@ type Share struct {
 // NewShare constructs a new Shamir share from an index and a value.
 func NewShare(index secp256k1.Secp256k1N, value secp256k1.Secp256k1N) Share {
 	return Share{index, value}
+}
+
+// GetBytes serialises the share into bytes and writes these bytes into the
+// given destination slice. A serialises to 64 bytes.
+//
+// Panics: If the destination slice has length less than 64, this function will
+// panic.
+func (s *Share) GetBytes(dst []byte) {
+	// Byte format:
+	//
+	// - First 32 bytes: index in big endian format.
+	// - Last 32 bytes: value in big endian format.
+
+	s.index.GetB32(dst[:32])
+	s.value.GetB32(dst[32:])
+}
+
+// SetBytes sets the caller from the given bytes. The format of these bytes is
+// that determined by the GetBytes method.
+func (s *Share) SetBytes(bs []byte) {
+	s.index.SetB32(bs[:32])
+	s.value.SetB32(bs[32:])
+}
+
+// Eq returns true if the two shares are equal, and false otherwise.
+func (s *Share) Eq(other *Share) bool {
+	return s.index.Eq(&other.index) && s.value.Eq(&other.value)
+}
+
+// SizeHint implements the surge.SizeHinter interface.
+func (s *Share) SizeHint() int { return 64 }
+
+// Marshal implements the surge.Marshaler interface.
+func (s *Share) Marshal(w io.Writer, m int) (int, error) {
+	var bs [64]byte
+	s.GetBytes(bs[:])
+	n, err := w.Write(bs[:])
+	return m - n, err
+}
+
+// Unmarshal implements the surge.Unmarshaler interface.
+func (s *Share) Unmarshal(r io.Reader, m int) (int, error) {
+	if m < 64 {
+		return m, surge.ErrMaxBytesExceeded
+	}
+	var bs [64]byte
+	n, err := io.ReadFull(r, bs[:])
+	if err != nil {
+		return m - n, err
+	}
+	s.SetBytes(bs[:])
+	return m - n, err
 }
 
 // Index returns a copy of the index of the share.
