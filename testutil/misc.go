@@ -1,8 +1,11 @@
 package testutil
 
 import (
+	"encoding/binary"
 	"errors"
 	"math/rand"
+
+	"github.com/renproject/secp256k1-go"
 )
 
 // Max returns the maximum of the two given ints.
@@ -40,4 +43,20 @@ func (rw *BoundedWriter) Write(p []byte) (int, error) {
 	}
 	rw.curr += len(p)
 	return len(p), nil
+}
+
+// RandomSliceBytes fills the destination byte slice by filling n lots of b
+// bytes, where each block of b bytes is filled using the fill argument.
+func RandomSliceBytes(dst []byte, n, b int, fill func([]byte)) {
+	binary.BigEndian.PutUint32(dst[:4], uint32(n))
+	for i := 0; i < n; i++ {
+		fill(dst[4+i*b:])
+	}
+}
+
+// FillRandSecp fills the destination byte slice with data corresponding to a
+// random element of the secp256k1 field.
+func FillRandSecp(dst []byte) {
+	x := secp256k1.RandomSecp256k1N()
+	x.GetB32(dst[:32])
 }

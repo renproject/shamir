@@ -451,6 +451,10 @@ var _ = Describe("Verifiable secret sharing", func() {
 			}
 		})
 
+		//
+		// Marshalling
+		//
+
 		Context("Marhsalling", func() {
 			Specify("marshalling a commitment to and from binary should leave it unchanged", func() {
 				for i := 0; i < trials; i++ {
@@ -477,20 +481,43 @@ var _ = Describe("Verifiable secret sharing", func() {
 			It("should error if marshalling fails", func() {
 				k := rand.Intn(maxK) + 1
 				RandomiseCommitment(&com, k)
+				buf := bytes.NewBuffer(bs[:])
 
-				// Error marshalling slice length.
-				max := rand.Intn(4)
-				w := NewBoundedWriter(max)
-				rem, err := com.Marshal(&w, com.SizeHint())
-				Expect(err).To(HaveOccurred())
-				Expect(rem).To(Equal(com.SizeHint() - max))
+				for i := 0; i < trials; i++ {
+					//
+					// Error marshalling slice length.
+					//
 
-				// Error marshalling a curve point.
-				max = RandRange(4, com.SizeHint()-1)
-				w = NewBoundedWriter(max)
-				rem, err = com.Marshal(&w, com.SizeHint())
-				Expect(err).To(HaveOccurred())
-				Expect(rem).To(Equal(com.SizeHint() - max))
+					// Writer not big enough.
+					max := rand.Intn(4)
+					w := NewBoundedWriter(max)
+					rem, err := com.Marshal(&w, com.SizeHint())
+					Expect(err).To(HaveOccurred())
+					Expect(rem).To(Equal(com.SizeHint() - max))
+
+					// Max not big enough.
+					max = rand.Intn(4)
+					rem, err = com.Marshal(buf, max)
+					Expect(err).To(HaveOccurred())
+					Expect(rem).To(Equal(max))
+
+					//
+					// Error marshalling a curve point.
+					//
+
+					// Writer not big enough.
+					max = RandRange(4, com.SizeHint()-1)
+					w = NewBoundedWriter(max)
+					rem, err = com.Marshal(&w, com.SizeHint())
+					Expect(err).To(HaveOccurred())
+					Expect(rem).To(Equal(com.SizeHint() - max))
+
+					// Max not big enough.
+					max = RandRange(4, com.SizeHint()-1)
+					rem, err = com.Marshal(buf, max)
+					Expect(err).To(HaveOccurred())
+					Expect(rem).To(Equal((max - 4) % 64))
+				}
 			})
 
 			It("should error if unmarshalling with not enough remaining bytes for the slice len", func() {
@@ -632,6 +659,206 @@ var _ = Describe("Verifiable secret sharing", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(n).To(Equal(readCap - dataLen))
 			}
+		})
+	})
+
+	Context("VSS Checker", func() {
+		trials := 1000
+
+		var checker VSSChecker
+
+		It("should marshall and unmarshall with surge successfully", func() {
+			var h curve.Point
+
+			for i := 0; i < trials; i++ {
+				h = curve.Random()
+				checker = NewVSSChecker(h)
+				bs, err := surge.ToBinary(&checker)
+				Expect(err).ToNot(HaveOccurred())
+				err = surge.FromBinary(bs[:], &checker)
+				Expect(err).ToNot(HaveOccurred())
+			}
+		})
+
+		Specify("unmarhsalling should return an error if the data isn't valid", func() {
+			var bs [64]byte
+
+			for i := 0; i < trials; i++ {
+				// The data is just that of a curve point. The probability that
+				// a random 64 bytes will represent a point on the curve is
+				// negligible.
+				rand.Read(bs[:])
+				buf := bytes.NewBuffer(bs[:])
+				m, err := checker.Unmarshal(buf, 64)
+				Expect(err).To(HaveOccurred())
+				Expect(m).To(Equal(0))
+			}
+		})
+	})
+
+	Context("VSS Sharer", func() {
+		trials := 20
+		const n int = 20
+
+		var k int
+		var secret secp256k1.Secp256k1N
+		var bs [4 + n*32 + 64]byte
+
+		indices := RandomIndices(n)
+		vshares := make(VerifiableShares, n)
+		c := NewCommitmentWithCapacity(n)
+		vssharer := NewVSSharer(indices, h)
+		checker := NewVSSChecker(h)
+
+		It("should work correctly after marshalling and unmarshalling", func() {
+			for i := 0; i < trials; i++ {
+				// Create a random sharing.
+				k = RandRange(1, n)
+				secret = secp256k1.RandomSecp256k1N()
+
+				// Marhsal and unmarshal the vssharer.
+				bs, err := surge.ToBinary(&vssharer)
+				Expect(err).ToNot(HaveOccurred())
+				err = surge.FromBinary(bs[:], &vssharer)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = vssharer.Share(&vshares, &c, secret, k)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Check that all shares are valid.
+				for _, share := range vshares {
+					Expect(checker.IsValid(&c, &share)).To(BeTrue())
+				}
+			}
+		})
+
+		Context("Marhsalling errors", func() {
+			It("should fail if the writer is not big enough", func() {
+				vssharer = NewVSSharer(indices, h)
+
+				for i := 0; i < trials; i++ {
+					//
+					// Error marshalling the sharer.
+					//
+
+					// Can't write slice length.
+					max := rand.Intn(4)
+					w := NewBoundedWriter(max)
+					rem, err := vssharer.Marshal(&w, vssharer.SizeHint())
+					Expect(err).To(HaveOccurred())
+					Expect(rem).To(Equal(vssharer.SizeHint() - max))
+
+					// Can't write all indices.
+					max = RandRange(4, vssharer.SizeHint()-h.SizeHint()-1)
+					w = NewBoundedWriter(max)
+					rem, err = vssharer.Marshal(&w, vssharer.SizeHint())
+					Expect(err).To(HaveOccurred())
+					Expect(rem).To(Equal(vssharer.SizeHint() - max))
+
+					//
+					// Error marshalling h.
+					//
+					max = RandRange(vssharer.SizeHint()-h.SizeHint(), vssharer.SizeHint()-1)
+					w = NewBoundedWriter(max)
+					rem, err = vssharer.Marshal(&w, vssharer.SizeHint())
+					Expect(err).To(HaveOccurred())
+					Expect(rem).To(Equal(vssharer.SizeHint() - max))
+				}
+			})
+
+			It("should fail if the max is not big enough", func() {
+				vssharer = NewVSSharer(indices, h)
+				buf := bytes.NewBuffer(bs[:])
+
+				for i := 0; i < trials; i++ {
+					//
+					// Error marshalling the sharer.
+					//
+
+					// Can't write slice length.
+					max := rand.Intn(4)
+					rem, err := vssharer.Marshal(buf, max)
+					Expect(err).To(HaveOccurred())
+					Expect(rem).To(Equal(max))
+
+					// Can't write all indices.
+					max = RandRange(4, vssharer.SizeHint()-h.SizeHint()-1)
+					rem, err = vssharer.Marshal(buf, max)
+					Expect(err).To(HaveOccurred())
+					Expect(rem).To(Equal((max - 4) % 32))
+
+					//
+					// Error marshalling h.
+					//
+					max = RandRange(vssharer.SizeHint()-h.SizeHint(), vssharer.SizeHint()-1)
+					rem, err = vssharer.Marshal(buf, max)
+					Expect(err).To(HaveOccurred())
+					Expect(rem).To(Equal(max - vssharer.SizeHint() + h.SizeHint()))
+				}
+			})
+		})
+
+		Context("Unmarshalling errors", func() {
+			It("should error if unmarshalling with not enough remaining bytes for the slice len", func() {
+				vssharer = VSSharer{}
+				buf := bytes.NewBuffer(bs[:])
+
+				for i := 0; i < trials; i++ {
+					max := rand.Intn(4)
+					m, err := vssharer.Unmarshal(buf, max)
+					Expect(err).To(HaveOccurred())
+					Expect(m).To(Equal(max))
+				}
+			})
+
+			It("should error if unmarshalling with not enough remaining bytes for the indices", func() {
+				for i := 0; i < trials; i++ {
+					k := rand.Intn(n) + 1
+					readCap := RandRange(4, 32*k+4-1)
+					dataLen := 32*k + 4
+					RandomSliceBytes(bs[:], k, 32, FillRandSecp)
+					buf := bytes.NewBuffer(bs[:dataLen])
+					m, err := vssharer.Unmarshal(buf, readCap)
+					Expect(err).To(HaveOccurred())
+					Expect(m).To(Equal(readCap - 4))
+				}
+			})
+
+			It("should error if unmarshalling with not enough remaining bytes for h", func() {
+				for i := 0; i < trials; i++ {
+					readCap := RandRange(4+32*n, 4+32*n+h.SizeHint())
+					dataLen := 4 + 32*n + h.SizeHint()
+					RandomSliceBytes(bs[:], n, 32, FillRandSecp)
+					buf := bytes.NewBuffer(bs[:dataLen])
+					m, err := vssharer.Unmarshal(buf, readCap)
+					Expect(err).To(HaveOccurred())
+					Expect(m).To(Equal(readCap - 4 - 32*n))
+				}
+			})
+
+			It("should error if unmarshalling without enough data", func() {
+				for i := 0; i < trials; i++ {
+					k := rand.Intn(n) + 1
+					indices = RandomIndices(k)
+					vssharer = NewVSSharer(indices, h)
+
+					// Error unmarshalling slice length.
+					max := rand.Intn(4)
+					buf := bytes.NewBuffer(bs[:max])
+					rem, err := vssharer.Unmarshal(buf, vssharer.SizeHint())
+					Expect(err).To(HaveOccurred())
+					Expect(rem).To(Equal(vssharer.SizeHint() - max))
+
+					// Error unmarshalling an index.
+					max = RandRange(4, vssharer.SizeHint()-h.SizeHint()-1)
+					binary.BigEndian.PutUint32(bs[:4], uint32(k))
+					buf = bytes.NewBuffer(bs[:max])
+					size := k*32 + 4
+					rem, err = vssharer.Unmarshal(buf, size)
+					Expect(err).To(HaveOccurred())
+					Expect(rem).To(Equal(size - max))
+				}
+			})
 		})
 	})
 })

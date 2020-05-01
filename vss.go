@@ -176,6 +176,10 @@ func (c *Commitment) SizeHint() int { return 64*len(c.points) + 4 }
 
 // Marshal implements the surge.Marshaler interface.
 func (c *Commitment) Marshal(w io.Writer, m int) (int, error) {
+	if m < 4 {
+		return m, surge.ErrMaxBytesExceeded
+	}
+
 	var bs [4]byte
 
 	binary.BigEndian.PutUint32(bs[:], uint32(len(c.points)))
@@ -186,6 +190,9 @@ func (c *Commitment) Marshal(w io.Writer, m int) (int, error) {
 	}
 
 	for i := range c.points {
+		if m < 64 {
+			return m, surge.ErrMaxBytesExceeded
+		}
 		m, err = c.points[i].Marshal(w, m)
 		if err != nil {
 			return m, err
@@ -311,6 +318,29 @@ type VSSChecker struct {
 	eval, gPow, hPow curve.Point
 }
 
+// SizeHint implements the surge.SizeHinter interface.
+func (checker *VSSChecker) SizeHint() int { return checker.h.SizeHint() }
+
+// Marshal implements the surge.Marshaler interface.
+func (checker *VSSChecker) Marshal(w io.Writer, m int) (int, error) {
+	var err error = nil
+	m, err = checker.h.Marshal(w, m)
+	return m, err
+}
+
+// Unmarshal implements the surge.Unmarshaler interface.
+func (checker *VSSChecker) Unmarshal(r io.Reader, m int) (int, error) {
+	var err error = nil
+	m, err = checker.h.Unmarshal(r, m)
+	if err != nil {
+		return m, err
+	}
+	checker.eval = curve.New()
+	checker.gPow = curve.New()
+	checker.hPow = curve.New()
+	return m, nil
+}
+
 // NewVSSChecker constructs a new VSS checking instance for the given Pedersen
 // commitment scheme parameter h. The other generator g is always chosen to be
 // the canonical base point for the secp256k1 curve.
@@ -345,6 +375,45 @@ type VSSharer struct {
 	// Cached variables
 	shares Shares
 	hPow   curve.Point
+}
+
+// SizeHint implements the surge.SizeHinter interface.
+func (s *VSSharer) SizeHint() int { return s.sharer.SizeHint() + s.h.SizeHint() }
+
+// Marshal implements the surge.Marshaler interface.
+func (s *VSSharer) Marshal(w io.Writer, m int) (int, error) {
+	var err error = nil
+
+	m, err = s.sharer.Marshal(w, m)
+	if err != nil {
+		return m, err
+	}
+
+	m, err = s.h.Marshal(w, m)
+	if err != nil {
+		return m, err
+	}
+
+	return m, nil
+}
+
+// Unmarshal implements the surge.Unmarshaler interface.
+func (s *VSSharer) Unmarshal(r io.Reader, m int) (int, error) {
+	var err error = nil
+
+	m, err = s.sharer.Unmarshal(r, m)
+	if err != nil {
+		return m, err
+	}
+
+	m, err = s.h.Unmarshal(r, m)
+	if err != nil {
+		return m, err
+	}
+
+	s.shares = make(Shares, len(s.sharer.indices))
+	s.hPow = curve.New()
+	return m, nil
 }
 
 // NewVSSharer constructs a new VSSharer from the given set of indices.
