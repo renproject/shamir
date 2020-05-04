@@ -199,6 +199,9 @@ func unmarshalToIndices(dst *[]secp256k1.Secp256k1N, r io.Reader, m int) (int, e
 		return m, err
 	}
 	l := binary.BigEndian.Uint32(bs[:4])
+	// Casting m (signed) to an unsigned int is safe here. This is because it
+	// is guaranteed to be positive: we check at the start of the function that
+	// m >= 4, and then only subtract n which satisfies n <= 4.
 	if uint32(m) < l*32 {
 		return m, surge.ErrMaxBytesExceeded
 	}
