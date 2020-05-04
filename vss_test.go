@@ -3,6 +3,7 @@ package shamir_test
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -389,7 +390,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 		var trials int
 		var com, com1, com2 Commitment
-		var bs [64*maxK + 4]byte
+		var bs [curve.PointSizeBytes*maxK + 4]byte
 
 		BeforeEach(func() {
 			trials = 100
@@ -403,13 +404,13 @@ var _ = Describe("Verifiable secret sharing", func() {
 			binary.BigEndian.PutUint32(dst[:4], uint32(k))
 			for i := 0; i < k; i++ {
 				point = curve.Random()
-				point.GetBytes(dst[4+i*64:])
+				point.GetBytes(dst[4+i*curve.PointSizeBytes:])
 			}
 		}
 
 		var RandomiseCommitment func(*Commitment, int)
 		{
-			var tmpBs [64*maxK + 4]byte
+			var tmpBs [curve.PointSizeBytes*maxK + 4]byte
 			RandomiseCommitment = func(dst *Commitment, k int) {
 				RandomCommitmentBytes(tmpBs[:], k)
 				dst.SetBytes(tmpBs[:])
@@ -460,7 +461,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 				for i := 0; i < trials; i++ {
 					k := rand.Intn(maxK) + 1
 					RandomiseCommitment(&com1, k)
-					nBytes := 64*com1.Len() + 4
+					nBytes := curve.PointSizeBytes*com1.Len() + 4
 					com1.GetBytes(bs[:nBytes])
 					com2.SetBytes(bs[:nBytes])
 					Expect(com1.Eq(&com2)).To(BeTrue())
@@ -516,7 +517,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 					max = RandRange(4, com.SizeHint()-1)
 					rem, err = com.Marshal(buf, max)
 					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal((max - 4) % 64))
+					Expect(rem).To(Equal((max - 4) % curve.PointSizeBytes))
 				}
 			})
 
@@ -536,8 +537,8 @@ var _ = Describe("Verifiable secret sharing", func() {
 			It("should error if unmarshalling with not enough remaining bytes for the curve points", func() {
 				for i := 0; i < trials; i++ {
 					k := rand.Intn(maxK) + 1
-					readCap := RandRange(4, 64*k+4-1)
-					dataLen := 64*k + 4
+					readCap := RandRange(4, curve.PointSizeBytes*k+4-1)
+					dataLen := curve.PointSizeBytes*k + 4
 					RandomCommitmentBytes(bs[:], k)
 					buf := bytes.NewBuffer(bs[:dataLen])
 					m, err := com.Unmarshal(buf, readCap)
@@ -549,7 +550,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 			It("should error if unmarshalling with data that specifies slice len > cap", func() {
 				for i := 0; i < trials; i++ {
 					k := RandRange(maxK+1, 10*maxK)
-					readCap := 64*k + 4
+					readCap := curve.PointSizeBytes*k + 4
 					binary.BigEndian.PutUint32(bs[:4], uint32(k))
 					buf := bytes.NewBuffer(bs[:])
 					m, err := com.Unmarshal(buf, readCap)
@@ -574,7 +575,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 					max = RandRange(4, com.SizeHint()-1)
 					binary.BigEndian.PutUint32(bs[:4], uint32(k))
 					buf = bytes.NewBuffer(bs[:max])
-					size := k*64 + 4
+					size := k*curve.PointSizeBytes + 4
 					rem, err = com.Unmarshal(buf, size)
 					Expect(err).To(HaveOccurred())
 					Expect(rem).To(Equal(size - max))
@@ -592,9 +593,9 @@ var _ = Describe("Verifiable secret sharing", func() {
 					binary.BigEndian.PutUint32(bs[:4], uint32(maxK))
 
 					buf := bytes.NewBuffer(bs[:])
-					m, err := com.Unmarshal(buf, 64*maxK+4)
+					m, err := com.Unmarshal(buf, curve.PointSizeBytes*maxK+4)
 					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal((maxK - 1) * 64))
+					Expect(m).To(Equal((maxK - 1) * curve.PointSizeBytes))
 				}
 			})
 		})
@@ -604,7 +605,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		trials := 1000
 		It("should be the same after marshalling to and from binary", func() {
 			var share1, share2 VerifiableShare
-			var bs [96]byte
+			var bs [VShareSizeBytes]byte
 
 			for i := 0; i < trials; i++ {
 				share1 = NewVerifiableShare(
@@ -633,7 +634,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		})
 
 		It("should error if unmarshalling with remaining bytes less than required", func() {
-			var bs [96]byte
+			var bs [VShareSizeBytes]byte
 			share := VerifiableShare{}
 			size := share.SizeHint()
 			buf := bytes.NewBuffer(bs[:])
@@ -647,7 +648,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		})
 
 		It("should error if unmarshalling without enough data", func() {
-			var bs [96]byte
+			var bs [VShareSizeBytes]byte
 			share := VerifiableShare{}
 			size := share.SizeHint()
 			readCap := size
@@ -681,7 +682,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		})
 
 		Specify("unmarhsalling should return an error if the data isn't valid", func() {
-			var bs [64]byte
+			var bs [curve.PointSizeBytes]byte
 
 			for i := 0; i < trials; i++ {
 				// The data is just that of a curve point. The probability that
@@ -689,7 +690,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 				// negligible.
 				rand.Read(bs[:])
 				buf := bytes.NewBuffer(bs[:])
-				m, err := checker.Unmarshal(buf, 64)
+				m, err := checker.Unmarshal(buf, curve.PointSizeBytes)
 				Expect(err).To(HaveOccurred())
 				Expect(m).To(Equal(0))
 			}
@@ -702,11 +703,12 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 		var k int
 		var secret secp256k1.Secp256k1N
-		var bs [4 + n*32 + 64]byte
+		var bs [4 + n*FnSizeBytes + curve.PointSizeBytes]byte
 
 		indices := RandomIndices(n)
 		vshares := make(VerifiableShares, n)
 		c := NewCommitmentWithCapacity(n)
+		fmt.Println(h)
 		vssharer := NewVSSharer(indices, h)
 		checker := NewVSSChecker(h)
 
@@ -785,7 +787,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 					max = RandRange(4, vssharer.SizeHint()-h.SizeHint()-1)
 					rem, err = vssharer.Marshal(buf, max)
 					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal((max - 4) % 32))
+					Expect(rem).To(Equal((max - 4) % FnSizeBytes))
 
 					//
 					// Error marshalling h.
@@ -814,9 +816,9 @@ var _ = Describe("Verifiable secret sharing", func() {
 			It("should error if unmarshalling with not enough remaining bytes for the indices", func() {
 				for i := 0; i < trials; i++ {
 					k := rand.Intn(n) + 1
-					readCap := RandRange(4, 32*k+4-1)
-					dataLen := 32*k + 4
-					RandomSliceBytes(bs[:], k, 32, FillRandSecp)
+					readCap := RandRange(4, FnSizeBytes*k+4-1)
+					dataLen := FnSizeBytes*k + 4
+					RandomSliceBytes(bs[:], k, FnSizeBytes, FillRandSecp)
 					buf := bytes.NewBuffer(bs[:dataLen])
 					m, err := vssharer.Unmarshal(buf, readCap)
 					Expect(err).To(HaveOccurred())
@@ -826,13 +828,13 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 			It("should error if unmarshalling with not enough remaining bytes for h", func() {
 				for i := 0; i < trials; i++ {
-					readCap := RandRange(4+32*n, 4+32*n+h.SizeHint())
-					dataLen := 4 + 32*n + h.SizeHint()
-					RandomSliceBytes(bs[:], n, 32, FillRandSecp)
+					readCap := RandRange(4+FnSizeBytes*n, 4+FnSizeBytes*n+h.SizeHint()-1)
+					dataLen := 4 + FnSizeBytes*n + h.SizeHint()
+					RandomSliceBytes(bs[:], n, FnSizeBytes, FillRandSecp)
 					buf := bytes.NewBuffer(bs[:dataLen])
 					m, err := vssharer.Unmarshal(buf, readCap)
 					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal(readCap - 4 - 32*n))
+					Expect(m).To(Equal(readCap - 4 - FnSizeBytes*n))
 				}
 			})
 
@@ -853,12 +855,19 @@ var _ = Describe("Verifiable secret sharing", func() {
 					max = RandRange(4, vssharer.SizeHint()-h.SizeHint()-1)
 					binary.BigEndian.PutUint32(bs[:4], uint32(k))
 					buf = bytes.NewBuffer(bs[:max])
-					size := k*32 + 4
+					size := k*FnSizeBytes + 4
 					rem, err = vssharer.Unmarshal(buf, size)
 					Expect(err).To(HaveOccurred())
 					Expect(rem).To(Equal(size - max))
 				}
 			})
+		})
+	})
+
+	Context("Constants", func() {
+		Specify("VShareSizeBytes should have the correct value", func() {
+			vshare := VerifiableShare{}
+			Expect(VShareSizeBytes).To(Equal(vshare.SizeHint()))
 		})
 	})
 })

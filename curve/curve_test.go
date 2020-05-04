@@ -85,4 +85,15 @@ var _ = Describe("Secp256k1 Curve", func() {
 			}
 		})
 	})
+
+	//
+	// Miscellaneous Tests
+	//
+
+	Context("Constants", func() {
+		Specify("PointSizeBytes should have correct value", func() {
+			p := New()
+			Expect(PointSizeBytes).To(Equal(p.SizeHint()))
+		})
+	})
 })

@@ -9,8 +9,79 @@ import (
 	"github.com/renproject/surge"
 )
 
+// FnSizeBytes is the number of bytes in the secp256k1.Secp256k1N type.
+const FnSizeBytes = 32
+
+// ShareSizeBytes is the number of bytes in a share.
+const ShareSizeBytes = 64
+
 // Shares represents a slice of Shamir shares
 type Shares []Share
+
+// SizeHint implements the surge.SizeHinter interface.
+func (shares *Shares) SizeHint() int { return ShareSizeBytes * len(*shares) }
+
+// Marshal implements the surge.Marshaler interface.
+func (shares *Shares) Marshal(w io.Writer, m int) (int, error) {
+	if m < 4 {
+		return m, surge.ErrMaxBytesExceeded
+	}
+
+	var bs [4]byte
+
+	binary.BigEndian.PutUint32(bs[:], uint32(len(*shares)))
+	n, err := w.Write(bs[:])
+	m -= n
+	if err != nil {
+		return m, err
+	}
+
+	for i := range *shares {
+		if m < (*shares)[i].SizeHint() {
+			return m, surge.ErrMaxBytesExceeded
+		}
+		m, err = (*shares)[i].Marshal(w, m)
+		if err != nil {
+			return m, err
+		}
+	}
+
+	return m, nil
+}
+
+// Unmarshal implements the surge.Unmarshaler interface.
+func (shares *Shares) Unmarshal(dst *[]secp256k1.Secp256k1N, r io.Reader, m int) (int, error) {
+	if m < 4 {
+		return m, surge.ErrMaxBytesExceeded
+	}
+
+	var bs [4]byte
+
+	// Slice length.
+	n, err := io.ReadFull(r, bs[:])
+	m -= n
+	if err != nil {
+		return m, err
+	}
+	l := binary.BigEndian.Uint32(bs[:])
+	// Casting m (signed) to an unsigned int is safe here. This is because it
+	// is guaranteed to be positive: we check at the start of the function that
+	// m >= 4, and then only subtract n which satisfies n <= 4.
+	if uint32(m) < l*ShareSizeBytes {
+		return m, surge.ErrMaxBytesExceeded
+	}
+
+	*shares = (*shares)[:0]
+	for i := uint32(0); i < l; i++ {
+		*shares = append(*shares, Share{})
+		m, err = (*shares)[i].Unmarshal(r, m)
+		if err != nil {
+			return m, err
+		}
+	}
+
+	return m, nil
+}
 
 // Share represents a single share in a Shamir secret sharing scheme.
 type Share struct {
@@ -51,31 +122,36 @@ func (s *Share) Eq(other *Share) bool {
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (s *Share) SizeHint() int { return 64 }
+func (s *Share) SizeHint() int { return s.index.SizeHint() + s.value.SizeHint() }
 
 // Marshal implements the surge.Marshaler interface.
 func (s *Share) Marshal(w io.Writer, m int) (int, error) {
-	if m < 64 {
+	if m < s.SizeHint() {
 		return m, surge.ErrMaxBytesExceeded
 	}
-	var bs [64]byte
-	s.GetBytes(bs[:])
-	n, err := w.Write(bs[:])
-	return m - n, err
+
+	m, err := s.index.Marshal(w, m)
+	if err != nil {
+		return m, err
+	}
+
+	m, err = s.value.Marshal(w, m)
+	return m, err
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.
 func (s *Share) Unmarshal(r io.Reader, m int) (int, error) {
-	if m < 64 {
+	if m < s.SizeHint() {
 		return m, surge.ErrMaxBytesExceeded
 	}
-	var bs [64]byte
-	n, err := io.ReadFull(r, bs[:])
+
+	m, err := s.index.Unmarshal(r, m)
 	if err != nil {
-		return m - n, err
+		return m, err
 	}
-	s.SetBytes(bs[:])
-	return m - n, err
+
+	m, err = s.value.Unmarshal(r, m)
+	return m, err
 }
 
 // Index returns a copy of the index of the share.
@@ -134,7 +210,7 @@ type Sharer struct {
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (sharer *Sharer) SizeHint() int { return 4 + len(sharer.indices)*32 }
+func (sharer *Sharer) SizeHint() int { return 4 + len(sharer.indices)*FnSizeBytes }
 
 // Marshal implements the surge.Marshaler interface.
 func (sharer *Sharer) Marshal(w io.Writer, m int) (int, error) {
@@ -161,7 +237,7 @@ func marshalFromIndices(indices []secp256k1.Secp256k1N, w io.Writer, m int) (int
 		return m, surge.ErrMaxBytesExceeded
 	}
 
-	var bs [32]byte
+	var bs [FnSizeBytes]byte
 
 	binary.BigEndian.PutUint32(bs[:4], uint32(len(indices)))
 	n, err := w.Write(bs[:4])
@@ -171,12 +247,10 @@ func marshalFromIndices(indices []secp256k1.Secp256k1N, w io.Writer, m int) (int
 	}
 
 	for i := range indices {
-		if m < 32 {
+		if m < indices[i].SizeHint() {
 			return m, surge.ErrMaxBytesExceeded
 		}
-		indices[i].GetB32(bs[:])
-		n, err := w.Write(bs[:])
-		m -= n
+		m, err = indices[i].Marshal(w, m)
 		if err != nil {
 			return m, err
 		}
@@ -190,7 +264,7 @@ func unmarshalToIndices(dst *[]secp256k1.Secp256k1N, r io.Reader, m int) (int, e
 		return m, surge.ErrMaxBytesExceeded
 	}
 
-	var bs [32]byte
+	var bs [FnSizeBytes]byte
 
 	// Slice length.
 	n, err := io.ReadFull(r, bs[:4])
@@ -202,18 +276,16 @@ func unmarshalToIndices(dst *[]secp256k1.Secp256k1N, r io.Reader, m int) (int, e
 	// Casting m (signed) to an unsigned int is safe here. This is because it
 	// is guaranteed to be positive: we check at the start of the function that
 	// m >= 4, and then only subtract n which satisfies n <= 4.
-	if uint32(m) < l*32 {
+	if uint32(m) < l*FnSizeBytes {
 		return m, surge.ErrMaxBytesExceeded
 	}
 
 	indices := make([]secp256k1.Secp256k1N, l)
 	for i := range indices {
-		n, err := io.ReadFull(r, bs[:])
-		m -= n
+		m, err = indices[i].Unmarshal(r, m)
 		if err != nil {
 			return m, err
 		}
-		indices[i].SetB32(bs[:])
 	}
 
 	*dst = indices
@@ -310,7 +382,7 @@ type Reconstructor struct {
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (r *Reconstructor) SizeHint() int { return 4 + len(r.indices)*32 }
+func (r *Reconstructor) SizeHint() int { return 4 + len(r.indices)*FnSizeBytes }
 
 // Marshal implements the surge.Marshaler interface.
 func (r *Reconstructor) Marshal(w io.Writer, m int) (int, error) {

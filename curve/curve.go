@@ -11,6 +11,9 @@ import (
 	"github.com/renproject/surge"
 )
 
+// PointSizeBytes is the size of a curve point in bytes.
+const PointSizeBytes = 64
+
 // Point represents a point on the secp256k1 elliptice curve.
 type Point struct {
 	x, y *big.Int
@@ -72,15 +75,15 @@ func (p *Point) SetBytes(bs []byte) {
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (p *Point) SizeHint() int { return 64 }
+func (p *Point) SizeHint() int { return PointSizeBytes }
 
 // Marshal implements the surge.Marshaler interface.
 func (p *Point) Marshal(w io.Writer, m int) (int, error) {
-	if m < 64 {
+	if m < PointSizeBytes {
 		return m, surge.ErrMaxBytesExceeded
 	}
 
-	var bs [64]byte
+	var bs [PointSizeBytes]byte
 	p.GetBytes(bs[:])
 	n, err := w.Write(bs[:])
 	return m - n, err
@@ -91,12 +94,12 @@ func (p *Point) Marshal(w io.Writer, m int) (int, error) {
 // NOTE: If the data does not represent a point on the elliptic curve, an error
 // will be returned.
 func (p *Point) Unmarshal(r io.Reader, m int) (int, error) {
-	if m < 64 {
+	if m < PointSizeBytes {
 		return m, surge.ErrMaxBytesExceeded
 	}
 
 	// This will only ever read 64 bytes from the reader.
-	var bs [64]byte
+	var bs [PointSizeBytes]byte
 	n, err := io.ReadFull(r, bs[:])
 	if err != nil {
 		return m - n, err
