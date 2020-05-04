@@ -2,6 +2,7 @@ package shamir_test
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math/rand"
 	"testing"
 	"time"
@@ -218,6 +219,17 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			}
 		})
 
+		It("should error if marshalling with remaining bytes less than 64", func() {
+			for i := 0; i < trials; i++ {
+				share := NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N())
+				max := rand.Intn(64)
+				buf := bytes.NewBuffer(bs[:])
+				n, err := share.Marshal(buf, max)
+				Expect(err).To(HaveOccurred())
+				Expect(n).To(Equal(max))
+			}
+		})
+
 		It("should error if unmarshalling fails", func() {
 			for i := 0; i < trials; i++ {
 				share := NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N())
@@ -254,7 +266,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 
 	Context("Sharer", func() {
 		trials := 100
-		n := 20
+		const n int = 20
 
 		var indices []secp256k1.Secp256k1N
 		var sharer Sharer
@@ -285,6 +297,131 @@ var _ = Describe("Shamir Secret Sharing", func() {
 				Expect(func() { sharer.Share(&shares, secret, k) }).Should(Panic())
 			}
 		})
+
+		//
+		// Marshaling
+		//
+
+		var bs [4 + n*32]byte
+
+		It("should function correctly after marshalling and unmarshalling", func() {
+			trials = 10
+			var k int
+			var secret secp256k1.Secp256k1N
+
+			shares := make(Shares, n)
+			sharer := NewSharer(indices)
+			reconstructor := NewReconstructor(indices)
+
+			for i := 0; i < trials; i++ {
+				k = RandRange(1, n)
+				secret = secp256k1.RandomSecp256k1N()
+
+				// Marhsal and unmarshal the sharer.
+				bs, err := surge.ToBinary(&sharer)
+				Expect(err).ToNot(HaveOccurred())
+				err = surge.FromBinary(bs[:], &sharer)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = sharer.Share(&shares, secret, k)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(
+					SharesAreConsistent(shares, secret, &reconstructor, k, 100),
+				).To(BeTrue())
+			}
+		})
+
+		It("should error if marshalling fails", func() {
+			sharer = NewSharer(indices)
+			buf := bytes.NewBuffer(bs[:])
+
+			for i := 0; i < trials; i++ {
+				//
+				// Error marshalling slice length.
+				//
+
+				// Writer not big enough.
+				max := rand.Intn(4)
+				w := NewBoundedWriter(max)
+				rem, err := sharer.Marshal(&w, sharer.SizeHint())
+				Expect(err).To(HaveOccurred())
+				Expect(rem).To(Equal(sharer.SizeHint() - max))
+
+				// Max not big enough.
+				max = rand.Intn(4)
+				rem, err = sharer.Marshal(buf, max)
+				Expect(err).To(HaveOccurred())
+				Expect(rem).To(Equal(max))
+
+				//
+				// Error marshalling an index.
+				//
+
+				// Writer not big enough.
+				max = RandRange(4, sharer.SizeHint()-1)
+				w = NewBoundedWriter(max)
+				rem, err = sharer.Marshal(&w, sharer.SizeHint())
+				Expect(err).To(HaveOccurred())
+				Expect(rem).To(Equal(sharer.SizeHint() - max))
+
+				// Max not big enough.
+				max = RandRange(4, sharer.SizeHint()-1)
+				rem, err = sharer.Marshal(buf, max)
+				Expect(err).To(HaveOccurred())
+				Expect(rem).To(Equal((max - 4) % 32))
+			}
+		})
+
+		It("should error if unmarshalling with not enough remaining bytes for the slice len", func() {
+			sharer = Sharer{}
+			size := sharer.SizeHint()
+			buf := bytes.NewBuffer(bs[:])
+
+			for i := 0; i < trials; i++ {
+				max := rand.Intn(size)
+				m, err := sharer.Unmarshal(buf, max)
+				Expect(err).To(HaveOccurred())
+				Expect(m).To(Equal(max))
+			}
+		})
+
+		It("should error if unmarshalling with not enough remaining bytes for the indices", func() {
+			for i := 0; i < trials; i++ {
+				k := rand.Intn(n) + 1
+				readCap := RandRange(4, 32*k+4-1)
+				dataLen := 32*k + 4
+				RandomSliceBytes(bs[:], k, 32, FillRandSecp)
+				buf := bytes.NewBuffer(bs[:dataLen])
+				m, err := sharer.Unmarshal(buf, readCap)
+				Expect(err).To(HaveOccurred())
+				Expect(m).To(Equal(readCap - 4))
+			}
+		})
+
+		It("should error if unmarshalling without enough data", func() {
+			for i := 0; i < trials; i++ {
+				k := rand.Intn(n) + 1
+				indices = RandomIndices(k)
+				sharer = NewSharer(indices)
+
+				// Error unmarshalling slice length.
+				max := rand.Intn(4)
+				buf := bytes.NewBuffer(bs[:max])
+				rem, err := sharer.Unmarshal(buf, sharer.SizeHint())
+				Expect(err).To(HaveOccurred())
+				Expect(rem).To(Equal(sharer.SizeHint() - max))
+
+				// Error unmarshalling an index.
+				max = RandRange(4, sharer.SizeHint()-1)
+				binary.BigEndian.PutUint32(bs[:4], uint32(k))
+				buf = bytes.NewBuffer(bs[:max])
+				size := k*32 + 4
+				rem, err = sharer.Unmarshal(buf, size)
+				Expect(err).To(HaveOccurred())
+				Expect(rem).To(Equal(size - max))
+			}
+		})
 	})
 
 	//
@@ -302,10 +439,13 @@ var _ = Describe("Shamir Secret Sharing", func() {
 
 	Context("Reconstructor", func() {
 		trials := 100
-		n := 20
+		const n int = 20
 
 		var indices []secp256k1.Secp256k1N
 		var reconstructor Reconstructor
+		var k int
+		var secret secp256k1.Secp256k1N
+		var bs [4 + n*32]byte
 
 		BeforeEach(func() {
 			indices = RandomIndices(n)
@@ -375,6 +515,125 @@ var _ = Describe("Shamir Secret Sharing", func() {
 
 				_, err = reconstructor.CheckedOpen(shares[:highK], k)
 				Expect(err).ToNot(HaveOccurred())
+			}
+		})
+
+		//
+		// Marshaling
+		//
+
+		It("should function correctly after marshalling and unmarshalling", func() {
+			trials = 10
+			shares := make(Shares, n)
+			sharer := NewSharer(indices)
+
+			for i := 0; i < trials; i++ {
+				k = RandRange(1, n)
+				secret = secp256k1.RandomSecp256k1N()
+
+				err := sharer.Share(&shares, secret, k)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Marhsal and unmarshal the reconstructor.
+				bs, err := surge.ToBinary(&reconstructor)
+				Expect(err).ToNot(HaveOccurred())
+				err = surge.FromBinary(bs[:], &reconstructor)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(
+					SharesAreConsistent(shares, secret, &reconstructor, k, 100),
+				).To(BeTrue())
+			}
+		})
+
+		It("should error if marshalling fails", func() {
+			reconstructor = NewReconstructor(indices)
+			buf := bytes.NewBuffer(bs[:])
+
+			for i := 0; i < trials; i++ {
+				//
+				// Error marshalling slice length.
+				//
+
+				// Writer not big enough.
+				max := rand.Intn(4)
+				w := NewBoundedWriter(max)
+				rem, err := reconstructor.Marshal(&w, reconstructor.SizeHint())
+				Expect(err).To(HaveOccurred())
+				Expect(rem).To(Equal(reconstructor.SizeHint() - max))
+
+				// Max not big enough.
+				max = rand.Intn(4)
+				rem, err = reconstructor.Marshal(buf, max)
+				Expect(err).To(HaveOccurred())
+				Expect(rem).To(Equal(max))
+
+				//
+				// Error marshalling an index.
+				//
+
+				// Writer not big enough.
+				max = RandRange(4, reconstructor.SizeHint()-1)
+				w = NewBoundedWriter(max)
+				rem, err = reconstructor.Marshal(&w, reconstructor.SizeHint())
+				Expect(err).To(HaveOccurred())
+				Expect(rem).To(Equal(reconstructor.SizeHint() - max))
+
+				// Max not big enough.
+				max = RandRange(4, reconstructor.SizeHint()-1)
+				rem, err = reconstructor.Marshal(buf, max)
+				Expect(err).To(HaveOccurred())
+				Expect(rem).To(Equal((max - 4) % 32))
+			}
+		})
+
+		It("should error if unmarshalling with not enough remaining bytes for the slice len", func() {
+			reconstructor = Reconstructor{}
+			size := reconstructor.SizeHint()
+			buf := bytes.NewBuffer(bs[:])
+
+			for i := 0; i < trials; i++ {
+				max := rand.Intn(size)
+				m, err := reconstructor.Unmarshal(buf, max)
+				Expect(err).To(HaveOccurred())
+				Expect(m).To(Equal(max))
+			}
+		})
+
+		It("should error if unmarshalling with not enough remaining bytes for the indices", func() {
+			for i := 0; i < trials; i++ {
+				k := rand.Intn(n) + 1
+				readCap := RandRange(4, 32*k+4-1)
+				dataLen := 32*k + 4
+				RandomSliceBytes(bs[:], k, 32, FillRandSecp)
+				buf := bytes.NewBuffer(bs[:dataLen])
+				m, err := reconstructor.Unmarshal(buf, readCap)
+				Expect(err).To(HaveOccurred())
+				Expect(m).To(Equal(readCap - 4))
+			}
+		})
+
+		It("should error if unmarshalling without enough data", func() {
+			for i := 0; i < trials; i++ {
+				k := rand.Intn(n) + 1
+				indices = RandomIndices(k)
+				reconstructor = NewReconstructor(indices)
+
+				// Error unmarshalling slice length.
+				max := rand.Intn(4)
+				buf := bytes.NewBuffer(bs[:max])
+				rem, err := reconstructor.Unmarshal(buf, reconstructor.SizeHint())
+				Expect(err).To(HaveOccurred())
+				Expect(rem).To(Equal(reconstructor.SizeHint() - max))
+
+				// Error unmarshalling an index.
+				max = RandRange(4, reconstructor.SizeHint()-1)
+				binary.BigEndian.PutUint32(bs[:4], uint32(k))
+				buf = bytes.NewBuffer(bs[:max])
+				size := k*32 + 4
+				rem, err = reconstructor.Unmarshal(buf, size)
+				Expect(err).To(HaveOccurred())
+				Expect(rem).To(Equal(size - max))
 			}
 		})
 	})

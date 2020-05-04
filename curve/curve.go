@@ -76,6 +76,10 @@ func (p *Point) SizeHint() int { return 64 }
 
 // Marshal implements the surge.Marshaler interface.
 func (p *Point) Marshal(w io.Writer, m int) (int, error) {
+	if m < 64 {
+		return m, surge.ErrMaxBytesExceeded
+	}
+
 	var bs [64]byte
 	p.GetBytes(bs[:])
 	n, err := w.Write(bs[:])

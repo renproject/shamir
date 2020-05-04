@@ -1,6 +1,7 @@
 package shamir
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 
@@ -54,6 +55,9 @@ func (s *Share) SizeHint() int { return 64 }
 
 // Marshal implements the surge.Marshaler interface.
 func (s *Share) Marshal(w io.Writer, m int) (int, error) {
+	if m < 64 {
+		return m, surge.ErrMaxBytesExceeded
+	}
 	var bs [64]byte
 	s.GetBytes(bs[:])
 	n, err := w.Write(bs[:])
@@ -127,6 +131,94 @@ func (s *Share) Scale(other *Share, scale *secp256k1.Secp256k1N) {
 type Sharer struct {
 	indices []secp256k1.Secp256k1N
 	coeffs  []secp256k1.Secp256k1N
+}
+
+// SizeHint implements the surge.SizeHinter interface.
+func (sharer *Sharer) SizeHint() int { return 4 + len(sharer.indices)*32 }
+
+// Marshal implements the surge.Marshaler interface.
+func (sharer *Sharer) Marshal(w io.Writer, m int) (int, error) {
+	return marshalFromIndices(sharer.indices, w, m)
+}
+
+// Unmarshal implements the surge.Unmarshaler interface.
+func (sharer *Sharer) Unmarshal(r io.Reader, m int) (int, error) {
+	var indices []secp256k1.Secp256k1N
+	var err error
+
+	m, err = unmarshalToIndices(&indices, r, m)
+	if err != nil {
+		return m, err
+	}
+
+	*sharer = NewSharer(indices)
+
+	return m, nil
+}
+
+func marshalFromIndices(indices []secp256k1.Secp256k1N, w io.Writer, m int) (int, error) {
+	if m < 4 {
+		return m, surge.ErrMaxBytesExceeded
+	}
+
+	var bs [32]byte
+
+	binary.BigEndian.PutUint32(bs[:4], uint32(len(indices)))
+	n, err := w.Write(bs[:4])
+	m -= n
+	if err != nil {
+		return m, err
+	}
+
+	for i := range indices {
+		if m < 32 {
+			return m, surge.ErrMaxBytesExceeded
+		}
+		indices[i].GetB32(bs[:])
+		n, err := w.Write(bs[:])
+		m -= n
+		if err != nil {
+			return m, err
+		}
+	}
+
+	return m, nil
+}
+
+func unmarshalToIndices(dst *[]secp256k1.Secp256k1N, r io.Reader, m int) (int, error) {
+	if m < 4 {
+		return m, surge.ErrMaxBytesExceeded
+	}
+
+	var bs [32]byte
+
+	// Slice length.
+	n, err := io.ReadFull(r, bs[:4])
+	m -= n
+	if err != nil {
+		return m, err
+	}
+	l := binary.BigEndian.Uint32(bs[:4])
+	// Casting m (signed) to an unsigned int is safe here. This is because it
+	// is guaranteed to be positive: we check at the start of the function that
+	// m >= 4, and then only subtract n which satisfies n <= 4.
+	if uint32(m) < l*32 {
+		return m, surge.ErrMaxBytesExceeded
+	}
+
+	indices := make([]secp256k1.Secp256k1N, l)
+	for i := range indices {
+		n, err := io.ReadFull(r, bs[:])
+		m -= n
+		if err != nil {
+			return m, err
+		}
+		indices[i].SetB32(bs[:])
+	}
+
+	*dst = indices
+
+	return m, nil
 }
 
 // NewSharer constructs a new Sharer object from the given set of indices.
@@ -215,6 +307,29 @@ type Reconstructor struct {
 	indInts    []int
 	seen       []bool
 	complement []int
+}
+
+// SizeHint implements the surge.SizeHinter interface.
+func (r *Reconstructor) SizeHint() int { return 4 + len(r.indices)*32 }
+
+// Marshal implements the surge.Marshaler interface.
+func (r *Reconstructor) Marshal(w io.Writer, m int) (int, error) {
+	return marshalFromIndices(r.indices, w, m)
+}
+
+// Unmarshal implements the surge.Unmarshaler interface.
+func (r *Reconstructor) Unmarshal(reader io.Reader, m int) (int, error) {
+	var indices []secp256k1.Secp256k1N
+	var err error
+
+	m, err = unmarshalToIndices(&indices, reader, m)
+	if err != nil {
+		return m, err
+	}
+
+	*r = NewReconstructor(indices)
+
+	return m, nil
 }
 
 // NewReconstructor returns a new Reconstructor instance for the given indices.
