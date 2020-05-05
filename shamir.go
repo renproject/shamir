@@ -37,9 +37,6 @@ func (shares *Shares) Marshal(w io.Writer, m int) (int, error) {
 	}
 
 	for i := range *shares {
-		if m < (*shares)[i].SizeHint() {
-			return m, surge.ErrMaxBytesExceeded
-		}
 		m, err = (*shares)[i].Marshal(w, m)
 		if err != nil {
 			return m, err
@@ -50,7 +47,7 @@ func (shares *Shares) Marshal(w io.Writer, m int) (int, error) {
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.
-func (shares *Shares) Unmarshal(dst *[]secp256k1.Secp256k1N, r io.Reader, m int) (int, error) {
+func (shares *Shares) Unmarshal(r io.Reader, m int) (int, error) {
 	if m < 4 {
 		return m, surge.ErrMaxBytesExceeded
 	}
@@ -126,10 +123,6 @@ func (s *Share) SizeHint() int { return s.index.SizeHint() + s.value.SizeHint() 
 
 // Marshal implements the surge.Marshaler interface.
 func (s *Share) Marshal(w io.Writer, m int) (int, error) {
-	if m < s.SizeHint() {
-		return m, surge.ErrMaxBytesExceeded
-	}
-
 	m, err := s.index.Marshal(w, m)
 	if err != nil {
 		return m, err
@@ -141,10 +134,6 @@ func (s *Share) Marshal(w io.Writer, m int) (int, error) {
 
 // Unmarshal implements the surge.Unmarshaler interface.
 func (s *Share) Unmarshal(r io.Reader, m int) (int, error) {
-	if m < s.SizeHint() {
-		return m, surge.ErrMaxBytesExceeded
-	}
-
 	m, err := s.index.Unmarshal(r, m)
 	if err != nil {
 		return m, err

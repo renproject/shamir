@@ -16,6 +16,68 @@ const VShareSizeBytes = ShareSizeBytes + FnSizeBytes
 // VerifiableShares is a alias for a slice of VerifiableShare(s).
 type VerifiableShares []VerifiableShare
 
+// SizeHint implements the surge.SizeHinter interface.
+func (vshares *VerifiableShares) SizeHint() int { return ShareSizeBytes * len(*vshares) }
+
+// Marshal implements the surge.Marshaler interface.
+func (vshares *VerifiableShares) Marshal(w io.Writer, m int) (int, error) {
+	if m < 4 {
+		return m, surge.ErrMaxBytesExceeded
+	}
+
+	var bs [4]byte
+
+	binary.BigEndian.PutUint32(bs[:], uint32(len(*vshares)))
+	n, err := w.Write(bs[:])
+	m -= n
+	if err != nil {
+		return m, err
+	}
+
+	for i := range *vshares {
+		m, err = (*vshares)[i].Marshal(w, m)
+		if err != nil {
+			return m, err
+		}
+	}
+
+	return m, nil
+}
+
+// Unmarshal implements the surge.Unmarshaler interface.
+func (vshares *VerifiableShares) Unmarshal(r io.Reader, m int) (int, error) {
+	if m < 4 {
+		return m, surge.ErrMaxBytesExceeded
+	}
+
+	var bs [4]byte
+
+	// Slice length.
+	n, err := io.ReadFull(r, bs[:])
+	m -= n
+	if err != nil {
+		return m, err
+	}
+	l := binary.BigEndian.Uint32(bs[:])
+	// Casting m (signed) to an unsigned int is safe here. This is because it
+	// is guaranteed to be positive: we check at the start of the function that
+	// m >= 4, and then only subtract n which satisfies n <= 4.
+	if uint32(m) < l*VShareSizeBytes {
+		return m, surge.ErrMaxBytesExceeded
+	}
+
+	*vshares = (*vshares)[:0]
+	for i := uint32(0); i < l; i++ {
+		*vshares = append(*vshares, VerifiableShare{})
+		m, err = (*vshares)[i].Unmarshal(r, m)
+		if err != nil {
+			return m, err
+		}
+	}
+
+	return m, nil
+}
+
 // A VerifiableShare is a Share but with additional information that allows it
 // to be verified as correct for a given commitment to a sharing.
 type VerifiableShare struct {
@@ -63,10 +125,6 @@ func (vs *VerifiableShare) SizeHint() int { return vs.share.SizeHint() + vs.r.Si
 
 // Marshal implements the surge.Marshaler interface.
 func (vs *VerifiableShare) Marshal(w io.Writer, m int) (int, error) {
-	if m < vs.SizeHint() {
-		return m, surge.ErrMaxBytesExceeded
-	}
-
 	m, err := vs.share.Marshal(w, m)
 	if err != nil {
 		return m, err
