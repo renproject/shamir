@@ -2,7 +2,6 @@ package shamir
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
 
 	"github.com/renproject/secp256k1-go"
@@ -289,16 +288,10 @@ func (c *Commitment) Unmarshal(r io.Reader, m int) (int, error) {
 	if m < int(l*curve.PointSizeBytes) {
 		return m, surge.ErrMaxBytesExceeded
 	}
-	if l > uint32(cap(c.points)) {
-		return m, fmt.Errorf(
-			"commitment too small for data: destination can hold %v points, data contains %v points",
-			cap(c.points),
-			l,
-		)
-	}
-	c.points = c.points[:l]
 
+	c.points = c.points[:0]
 	for i := 0; i < int(l); i++ {
+		c.points = append(c.points, curve.New())
 		m, err = c.points[i].Unmarshal(r, m)
 		if err != nil {
 			return m, err

@@ -266,15 +266,14 @@ func unmarshalToIndices(dst *[]secp256k1.Secp256k1N, r io.Reader, m int) (int, e
 		return m, surge.ErrMaxBytesExceeded
 	}
 
-	indices := make([]secp256k1.Secp256k1N, l)
-	for i := range indices {
-		m, err = indices[i].Unmarshal(r, m)
+	*dst = (*dst)[:0]
+	for i := uint32(0); i < l; i++ {
+		*dst = append(*dst, secp256k1.Secp256k1N{})
+		m, err = (*dst)[i].Unmarshal(r, m)
 		if err != nil {
 			return m, err
 		}
 	}
-
-	*dst = indices
 
 	return m, nil
 }
