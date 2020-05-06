@@ -17,25 +17,25 @@ const VShareSizeBytes = ShareSizeBytes + FnSizeBytes
 type VerifiableShares []VerifiableShare
 
 // SizeHint implements the surge.SizeHinter interface.
-func (vshares *VerifiableShares) SizeHint() int { return ShareSizeBytes * len(*vshares) }
+func (vshares VerifiableShares) SizeHint() int { return ShareSizeBytes * len(vshares) }
 
 // Marshal implements the surge.Marshaler interface.
-func (vshares *VerifiableShares) Marshal(w io.Writer, m int) (int, error) {
+func (vshares VerifiableShares) Marshal(w io.Writer, m int) (int, error) {
 	if m < 4 {
 		return m, surge.ErrMaxBytesExceeded
 	}
 
 	var bs [4]byte
 
-	binary.BigEndian.PutUint32(bs[:], uint32(len(*vshares)))
+	binary.BigEndian.PutUint32(bs[:], uint32(len(vshares)))
 	n, err := w.Write(bs[:])
 	m -= n
 	if err != nil {
 		return m, err
 	}
 
-	for i := range *vshares {
-		m, err = (*vshares)[i].Marshal(w, m)
+	for i := range vshares {
+		m, err = vshares[i].Marshal(w, m)
 		if err != nil {
 			return m, err
 		}

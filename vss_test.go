@@ -3,7 +3,6 @@ package shamir_test
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -896,7 +895,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 		indices := RandomIndices(n)
 		vshares := make(VerifiableShares, n)
 		c := NewCommitmentWithCapacity(n)
-		fmt.Println(h)
 		vssharer := NewVSSharer(indices, h)
 		checker := NewVSSChecker(h)
 

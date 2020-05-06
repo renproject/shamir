@@ -19,25 +19,25 @@ const ShareSizeBytes = 64
 type Shares []Share
 
 // SizeHint implements the surge.SizeHinter interface.
-func (shares *Shares) SizeHint() int { return ShareSizeBytes * len(*shares) }
+func (shares Shares) SizeHint() int { return ShareSizeBytes * len(shares) }
 
 // Marshal implements the surge.Marshaler interface.
-func (shares *Shares) Marshal(w io.Writer, m int) (int, error) {
+func (shares Shares) Marshal(w io.Writer, m int) (int, error) {
 	if m < 4 {
 		return m, surge.ErrMaxBytesExceeded
 	}
 
 	var bs [4]byte
 
-	binary.BigEndian.PutUint32(bs[:], uint32(len(*shares)))
+	binary.BigEndian.PutUint32(bs[:], uint32(len(shares)))
 	n, err := w.Write(bs[:])
 	m -= n
 	if err != nil {
 		return m, err
 	}
 
-	for i := range *shares {
-		m, err = (*shares)[i].Marshal(w, m)
+	for i := range shares {
+		m, err = shares[i].Marshal(w, m)
 		if err != nil {
 			return m, err
 		}
@@ -236,9 +236,6 @@ func marshalFromIndices(indices []secp256k1.Secp256k1N, w io.Writer, m int) (int
 	}
 
 	for i := range indices {
-		if m < indices[i].SizeHint() {
-			return m, surge.ErrMaxBytesExceeded
-		}
 		m, err = indices[i].Marshal(w, m)
 		if err != nil {
 			return m, err
