@@ -110,6 +110,8 @@ github.com/renproject/secp256k1-go v1.0.0 h1:Qh5YqhGzho2I9lFPjLjrychufVxyP2rPOou
 github.com/renproject/secp256k1-go v1.0.0/go.mod h1:B2SL4dvuIbfHa0jmXegRo5FMqmq6furaJk7H+NtD4Sw=
 github.com/renproject/secp256k1-go v1.0.1-0.20200323035948-0e1ac7e556b5 h1:Mu+NzHNRZZRVd63N/xWPQL/srm58MPmaiKUUdU6T3nc=
 github.com/renproject/secp256k1-go v1.0.1-0.20200323035948-0e1ac7e556b5/go.mod h1:B2SL4dvuIbfHa0jmXegRo5FMqmq6furaJk7H+NtD4Sw=
+github.com/renproject/secp256k1-go v1.0.1-0.20200504045212-d6564a52d0fc h1:1CyIKfOR9PxbsyGgM27RyWBanCQkPDnXhCVYQmn5k24=
+github.com/renproject/secp256k1-go v1.0.1-0.20200504045212-d6564a52d0fc/go.mod h1:B+Vw5L6LQP/rmcBtSIdqog/SwnhlCOCuJjiGqv9PwtI=
 github.com/renproject/surge v1.1.2 h1:Yy3pTlRyaMJGLfn64JHgCnWs3cWbRJjE+aFxZXRGfWU=
 github.com/renproject/surge v1.1.2/go.mod h1:UnnFYpLSD0T9MzCcyHjbNdmxiQsDVyBDCuqcbhcaLCY=
 github.com/rjeczalik/notify v0.9.1/go.mod h1:rKwnCoCGeuQnwBtTSPL9Dad03Vh2n40ePRrjvIXnJho=

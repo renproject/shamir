@@ -10,8 +10,73 @@ import (
 	"github.com/renproject/surge"
 )
 
+// VShareSizeBytes is the size of a verifiable share in bytes.
+const VShareSizeBytes = ShareSizeBytes + FnSizeBytes
+
 // VerifiableShares is a alias for a slice of VerifiableShare(s).
 type VerifiableShares []VerifiableShare
+
+// SizeHint implements the surge.SizeHinter interface.
+func (vshares VerifiableShares) SizeHint() int { return ShareSizeBytes * len(vshares) }
+
+// Marshal implements the surge.Marshaler interface.
+func (vshares VerifiableShares) Marshal(w io.Writer, m int) (int, error) {
+	if m < 4 {
+		return m, surge.ErrMaxBytesExceeded
+	}
+
+	var bs [4]byte
+
+	binary.BigEndian.PutUint32(bs[:], uint32(len(vshares)))
+	n, err := w.Write(bs[:])
+	m -= n
+	if err != nil {
+		return m, err
+	}
+
+	for i := range vshares {
+		m, err = vshares[i].Marshal(w, m)
+		if err != nil {
+			return m, err
+		}
+	}
+
+	return m, nil
+}
+
+// Unmarshal implements the surge.Unmarshaler interface.
+func (vshares *VerifiableShares) Unmarshal(r io.Reader, m int) (int, error) {
+	if m < 4 {
+		return m, surge.ErrMaxBytesExceeded
+	}
+
+	var bs [4]byte
+
+	// Slice length.
+	n, err := io.ReadFull(r, bs[:])
+	m -= n
+	if err != nil {
+		return m, err
+	}
+	l := binary.BigEndian.Uint32(bs[:])
+	// Casting m (signed) to an unsigned int is safe here. This is because it
+	// is guaranteed to be positive: we check at the start of the function that
+	// m >= 4, and then only subtract n which satisfies n <= 4.
+	if uint32(m) < l*VShareSizeBytes {
+		return m, surge.ErrMaxBytesExceeded
+	}
+
+	*vshares = (*vshares)[:0]
+	for i := uint32(0); i < l; i++ {
+		*vshares = append(*vshares, VerifiableShare{})
+		m, err = (*vshares)[i].Unmarshal(r, m)
+		if err != nil {
+			return m, err
+		}
+	}
+
+	return m, nil
+}
 
 // A VerifiableShare is a Share but with additional information that allows it
 // to be verified as correct for a given commitment to a sharing.
@@ -39,15 +104,15 @@ func (vs *VerifiableShare) GetBytes(dst []byte) {
 	// - First 64 bytes: serialised Shamir share.
 	// - Last 32 bytes: decommitment value in big endian format.
 
-	vs.share.GetBytes(dst[:64])
-	vs.r.GetB32(dst[64:])
+	vs.share.GetBytes(dst[:ShareSizeBytes])
+	vs.r.GetB32(dst[ShareSizeBytes:])
 }
 
 // SetBytes sets the caller from the given bytes. The format of these bytes is
 // that determined by the GetBytes method.
 func (vs *VerifiableShare) SetBytes(bs []byte) {
-	vs.share.SetBytes(bs[:64])
-	vs.r.SetB32(bs[64:])
+	vs.share.SetBytes(bs[:ShareSizeBytes])
+	vs.r.SetB32(bs[ShareSizeBytes:])
 }
 
 // Eq returns true if the two verifiable shares are equal, and false otherwise.
@@ -56,28 +121,32 @@ func (vs *VerifiableShare) Eq(other *VerifiableShare) bool {
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (vs *VerifiableShare) SizeHint() int { return 96 }
+func (vs *VerifiableShare) SizeHint() int { return vs.share.SizeHint() + vs.r.SizeHint() }
 
 // Marshal implements the surge.Marshaler interface.
 func (vs *VerifiableShare) Marshal(w io.Writer, m int) (int, error) {
-	var bs [96]byte
-	vs.GetBytes(bs[:])
-	n, err := w.Write(bs[:])
-	return m - n, err
+	m, err := vs.share.Marshal(w, m)
+	if err != nil {
+		return m, err
+	}
+
+	m, err = vs.r.Marshal(w, m)
+	return m, err
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.
 func (vs *VerifiableShare) Unmarshal(r io.Reader, m int) (int, error) {
-	if m < 96 {
+	if m < vs.SizeHint() {
 		return m, surge.ErrMaxBytesExceeded
 	}
-	var bs [96]byte
-	n, err := io.ReadFull(r, bs[:])
+
+	m, err := vs.share.Unmarshal(r, m)
 	if err != nil {
-		return m - n, err
+		return m, err
 	}
-	vs.SetBytes(bs[:])
-	return m - n, err
+
+	m, err = vs.r.Unmarshal(r, m)
+	return m, err
 }
 
 // Share returns the underlying Shamir share of the verifiable share.
@@ -157,7 +226,7 @@ func (c *Commitment) GetBytes(dst []byte) {
 
 	binary.BigEndian.PutUint32(dst[:4], uint32(len(c.points)))
 	for i, p := range c.points {
-		p.GetBytes(dst[64*i+4:])
+		p.GetBytes(dst[curve.PointSizeBytes*i+4:])
 	}
 }
 
@@ -167,12 +236,12 @@ func (c *Commitment) SetBytes(bs []byte) {
 	nPoints := int(binary.BigEndian.Uint32(bs[:4]))
 	c.points = c.points[:nPoints]
 	for i := 0; i < nPoints; i++ {
-		c.points[i].SetBytes(bs[64*i+4:])
+		c.points[i].SetBytes(bs[curve.PointSizeBytes*i+4:])
 	}
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (c *Commitment) SizeHint() int { return 64*len(c.points) + 4 }
+func (c *Commitment) SizeHint() int { return curve.PointSizeBytes*len(c.points) + 4 }
 
 // Marshal implements the surge.Marshaler interface.
 func (c *Commitment) Marshal(w io.Writer, m int) (int, error) {
@@ -190,9 +259,10 @@ func (c *Commitment) Marshal(w io.Writer, m int) (int, error) {
 	}
 
 	for i := range c.points {
-		if m < 64 {
+		if m < c.points[i].SizeHint() {
 			return m, surge.ErrMaxBytesExceeded
 		}
+
 		m, err = c.points[i].Marshal(w, m)
 		if err != nil {
 			return m, err
@@ -216,7 +286,7 @@ func (c *Commitment) Unmarshal(r io.Reader, m int) (int, error) {
 
 	// Number of curve points.
 	l := binary.BigEndian.Uint32(bs[:])
-	if m < int(l*64) {
+	if m < int(l*curve.PointSizeBytes) {
 		return m, surge.ErrMaxBytesExceeded
 	}
 	if l > uint32(cap(c.points)) {
@@ -285,7 +355,7 @@ func (c *Commitment) Add(a, b *Commitment) {
 // Panics: If the destination commitment does not have capacity at least as big
 // as the input commitment, then this function will panic.
 func (c *Commitment) Scale(other *Commitment, scale *secp256k1.Secp256k1N) {
-	var bs [32]byte
+	var bs [FnSizeBytes]byte
 	scale.GetB32(bs[:])
 	c.points = c.points[:len(other.points)]
 	for i := range c.points {
@@ -295,7 +365,7 @@ func (c *Commitment) Scale(other *Commitment, scale *secp256k1.Secp256k1N) {
 
 // Evaluates the sharing polynomial at the given index "in the exponent".
 func (c *Commitment) evaluate(eval *curve.Point, index *secp256k1.Secp256k1N) {
-	var bs [32]byte
+	var bs [FnSizeBytes]byte
 	index.GetB32(bs[:])
 	eval.Set(&c.points[len(c.points)-1])
 	for i := len(c.points) - 2; i >= 0; i-- {
@@ -352,7 +422,7 @@ func NewVSSChecker(h curve.Point) VSSChecker {
 // IsValid returns true when the given verifiable share is valid with regard to
 // the given commitment, and false otherwise.
 func (checker *VSSChecker) IsValid(c *Commitment, vshare *VerifiableShare) bool {
-	var bs [32]byte
+	var bs [FnSizeBytes]byte
 	vshare.share.value.GetB32(bs[:])
 	checker.gPow.BaseExp(bs)
 	vshare.r.GetB32(bs[:])
@@ -440,7 +510,7 @@ func (s *VSSharer) Share(vshares *VerifiableShares, c *Commitment, secret secp25
 
 	// At this point, the sharer should still have the randomly picked
 	// coefficients in its cache, which we need to use for the commitment.
-	var bs [32]byte
+	var bs [FnSizeBytes]byte
 	c.points = c.points[:k]
 	for i, coeff := range s.sharer.coeffs {
 		coeff.GetB32(bs[:])
