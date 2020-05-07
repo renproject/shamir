@@ -546,18 +546,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 				}
 			})
 
-			It("should error if unmarshalling with data that specifies slice len > cap", func() {
-				for i := 0; i < trials; i++ {
-					k := RandRange(maxK+1, 10*maxK)
-					readCap := curve.PointSizeBytes*k + 4
-					binary.BigEndian.PutUint32(bs[:4], uint32(k))
-					buf := bytes.NewBuffer(bs[:])
-					m, err := com.Unmarshal(buf, readCap)
-					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal(readCap - 4))
-				}
-			})
-
 			It("should error if unmarshalling without enough data", func() {
 				for i := 0; i < trials; i++ {
 					k := rand.Intn(maxK) + 1
