@@ -495,6 +495,14 @@ var _ = Describe("Shamir Secret Sharing", func() {
 		})
 
 		//
+		// Miscellaneous Tests
+		//
+
+		It("should correctly report the number of indices", func() {
+			Expect(sharer.N()).To(Equal(n))
+		})
+
+		//
 		// Marshaling
 		//
 
@@ -724,6 +732,14 @@ var _ = Describe("Shamir Secret Sharing", func() {
 				_, err = reconstructor.CheckedOpen(shares[:highK], k)
 				Expect(err).ToNot(HaveOccurred())
 			}
+		})
+
+		//
+		// Miscellaneous Tests
+		//
+
+		It("should correctly report the number of indices", func() {
+			Expect(reconstructor.N()).To(Equal(n))
 		})
 
 		//

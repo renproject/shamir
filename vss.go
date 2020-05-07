@@ -456,6 +456,12 @@ func (s *VSSharer) Unmarshal(r io.Reader, m int) (int, error) {
 	return m, nil
 }
 
+// N returns the number of players associated with this VSSharer instance. This
+// is equal to the number of indices it was constructed with.
+func (s *VSSharer) N() int {
+	return s.sharer.N()
+}
+
 // NewVSSharer constructs a new VSSharer from the given set of indices.
 func NewVSSharer(indices []secp256k1.Secp256k1N, h curve.Point) VSSharer {
 	sharer := NewSharer(indices)

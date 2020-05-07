@@ -1040,6 +1040,10 @@ var _ = Describe("Verifiable secret sharing", func() {
 					Expect(rem).To(Equal(max - vssharer.SizeHint() + h.SizeHint()))
 				}
 			})
+
+			It("should correctly report the number of indices", func() {
+				Expect(vssharer.N()).To(Equal(n))
+			})
 		})
 
 		Context("Unmarshalling errors", func() {
