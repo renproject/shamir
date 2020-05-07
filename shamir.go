@@ -251,6 +251,12 @@ func unmarshalToIndices(dst *[]secp256k1.Secp256k1N, r io.Reader, m int) (int, e
 	return m, nil
 }
 
+// N returns the number of players associated with this sharer instance. This
+// is equal to the the number of indices it was constructed with.
+func (sharer *Sharer) N() int {
+	return len(sharer.indices)
+}
+
 // NewSharer constructs a new Sharer object from the given set of indices.
 func NewSharer(indices []secp256k1.Secp256k1N) Sharer {
 	copiedIndices := make([]secp256k1.Secp256k1N, len(indices))
@@ -360,6 +366,12 @@ func (r *Reconstructor) Unmarshal(reader io.Reader, m int) (int, error) {
 	*r = NewReconstructor(indices)
 
 	return m, nil
+}
+
+// N returns the number of players associated with this reconstructor instance.
+// This is equal to the number of indices it was constructed with.
+func (r *Reconstructor) N() int {
+	return len(r.indices)
 }
 
 // NewReconstructor returns a new Reconstructor instance for the given indices.
