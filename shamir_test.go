@@ -219,6 +219,19 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			}
 		})
 
+		It("should be able to unmarshal into an empty struct", func() {
+			buf := bytes.NewBuffer(bs[:])
+			buf.Reset()
+			share1 := NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N())
+			share2 := Share{}
+
+			_, _ = share1.Marshal(buf, share1.SizeHint())
+			m, err := share2.Unmarshal(buf, share1.SizeHint())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(m).To(Equal(0))
+			Expect(share1.Eq(&share2)).To(BeTrue())
+		})
+
 		It("should error if marshalling with remaining bytes less than 32", func() {
 			for i := 0; i < trials; i++ {
 				share := NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N())
@@ -330,6 +343,19 @@ var _ = Describe("Shamir Secret Sharing", func() {
 				err = surge.FromBinary(bs[:], &shares2)
 				Expect(SharesAreEq(shares1, shares2)).To(BeTrue())
 			}
+		})
+
+		It("should be able to unmarshal into an empty struct", func() {
+			buf.Reset()
+			shares1 = shares1[:maxN]
+			RandomiseShares(shares1)
+			shares2 := Shares{}
+
+			_, _ = shares1.Marshal(buf, shares1.SizeHint())
+			m, err := shares2.Unmarshal(buf, shares1.SizeHint())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(m).To(Equal(0))
+			Expect(SharesAreEq(shares1, shares2)).To(BeTrue())
 		})
 
 		Context("Marshalling errors", func() {
@@ -500,6 +526,18 @@ var _ = Describe("Shamir Secret Sharing", func() {
 					SharesAreConsistent(shares, secret, &reconstructor, k, 100),
 				).To(BeTrue())
 			}
+		})
+
+		It("should be able to unmarshal into an empty struct", func() {
+			buf := bytes.NewBuffer(bs[:])
+			buf.Reset()
+			sharer = NewSharer(indices)
+			sharer2 := Sharer{}
+
+			_, _ = sharer.Marshal(buf, sharer.SizeHint())
+			m, err := sharer2.Unmarshal(buf, sharer.SizeHint())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(m).To(Equal(0))
 		})
 
 		It("should error if marshalling fails", func() {
@@ -714,6 +752,18 @@ var _ = Describe("Shamir Secret Sharing", func() {
 					SharesAreConsistent(shares, secret, &reconstructor, k, 100),
 				).To(BeTrue())
 			}
+		})
+
+		It("should be able to unmarshal into an empty struct", func() {
+			buf := bytes.NewBuffer(bs[:])
+			buf.Reset()
+			reconstructor = NewReconstructor(indices)
+			reconstructor2 := Reconstructor{}
+
+			_, _ = reconstructor.Marshal(buf, reconstructor.SizeHint())
+			m, err := reconstructor2.Unmarshal(buf, reconstructor.SizeHint())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(m).To(Equal(0))
 		})
 
 		It("should error if marshalling fails", func() {

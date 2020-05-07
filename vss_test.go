@@ -478,6 +478,19 @@ var _ = Describe("Verifiable secret sharing", func() {
 				}
 			})
 
+			It("should be able to unmarshal into an empty struct", func() {
+				buf := bytes.NewBuffer(bs[:])
+				buf.Reset()
+				RandomiseCommitment(&com1, maxK)
+				com2 := Commitment{}
+
+				_, _ = com1.Marshal(buf, com1.SizeHint())
+				m, err := com2.Unmarshal(buf, com1.SizeHint())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(m).To(Equal(0))
+				Expect(com1.Eq(&com2)).To(BeTrue())
+			})
+
 			It("should error if marshalling fails", func() {
 				k := rand.Intn(maxK) + 1
 				RandomiseCommitment(&com, k)
@@ -620,6 +633,23 @@ var _ = Describe("Verifiable secret sharing", func() {
 			}
 		})
 
+		It("should be able to unmarshal into an empty struct", func() {
+			var bs [VShareSizeBytes]byte
+			buf := bytes.NewBuffer(bs[:])
+			buf.Reset()
+			share1 := NewVerifiableShare(
+				NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N()),
+				secp256k1.RandomSecp256k1N(),
+			)
+			share2 := VerifiableShare{}
+
+			_, _ = share1.Marshal(buf, share1.SizeHint())
+			m, err := share2.Unmarshal(buf, share1.SizeHint())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(m).To(Equal(0))
+			Expect(share1.Eq(&share2)).To(BeTrue())
+		})
+
 		It("should error if marshalling with remaining bytes less than required for the share", func() {
 			var bs [VShareSizeBytes]byte
 			share := VerifiableShare{}
@@ -747,6 +777,19 @@ var _ = Describe("Verifiable secret sharing", func() {
 			}
 		})
 
+		It("should be able to unmarshal into an empty struct", func() {
+			buf.Reset()
+			shares1 = shares1[:maxN]
+			RandomiseVerifiableShares(shares1)
+			shares2 := VerifiableShares{}
+
+			_, _ = shares1.Marshal(buf, shares1.SizeHint())
+			m, err := shares2.Unmarshal(buf, shares1.SizeHint())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(m).To(Equal(0))
+			Expect(VerifiableSharesAreEq(shares1, shares2)).To(BeTrue())
+		})
+
 		Context("Marshalling errors", func() {
 			It("should return an error when the max is too small for the slice length", func() {
 				for i := 0; i < trials; i++ {
@@ -856,6 +899,19 @@ var _ = Describe("Verifiable secret sharing", func() {
 			}
 		})
 
+		It("should be able to unmarshal into an empty struct", func() {
+			var bs [curve.PointSizeBytes]byte
+			buf := bytes.NewBuffer(bs[:])
+			buf.Reset()
+			checker1 := NewVSSChecker(h)
+			checker2 := VSSChecker{}
+
+			_, _ = checker1.Marshal(buf, checker1.SizeHint())
+			m, err := checker2.Unmarshal(buf, checker1.SizeHint())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(m).To(Equal(0))
+		})
+
 		Specify("unmarhsalling should return an error if the data isn't valid", func() {
 			var bs [curve.PointSizeBytes]byte
 
@@ -906,6 +962,18 @@ var _ = Describe("Verifiable secret sharing", func() {
 					Expect(checker.IsValid(&c, &share)).To(BeTrue())
 				}
 			}
+		})
+
+		It("should be able to unmarshal into an empty struct", func() {
+			buf := bytes.NewBuffer(bs[:])
+			buf.Reset()
+			vssharer1 := NewVSSharer(indices, h)
+			vssharer2 := VSSharer{}
+
+			_, _ = vssharer1.Marshal(buf, vssharer1.SizeHint())
+			m, err := vssharer2.Unmarshal(buf, vssharer1.SizeHint())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(m).To(Equal(0))
 		})
 
 		Context("Marhsalling errors", func() {

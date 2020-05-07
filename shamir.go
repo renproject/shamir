@@ -19,7 +19,7 @@ const ShareSizeBytes = 64
 type Shares []Share
 
 // SizeHint implements the surge.SizeHinter interface.
-func (shares Shares) SizeHint() int { return ShareSizeBytes * len(shares) }
+func (shares Shares) SizeHint() int { return 4 + ShareSizeBytes*len(shares) }
 
 // Marshal implements the surge.Marshaler interface.
 func (shares Shares) Marshal(w io.Writer, m int) (int, error) {
@@ -250,15 +250,15 @@ func unmarshalToIndices(dst *[]secp256k1.Secp256k1N, r io.Reader, m int) (int, e
 		return m, surge.ErrMaxBytesExceeded
 	}
 
-	var bs [FnSizeBytes]byte
+	var bs [4]byte
 
 	// Slice length.
-	n, err := io.ReadFull(r, bs[:4])
+	n, err := io.ReadFull(r, bs[:])
 	m -= n
 	if err != nil {
 		return m, err
 	}
-	l := binary.BigEndian.Uint32(bs[:4])
+	l := binary.BigEndian.Uint32(bs[:])
 	// Casting m (signed) to an unsigned int is safe here. This is because it
 	// is guaranteed to be positive: we check at the start of the function that
 	// m >= 4, and then only subtract n which satisfies n <= 4.

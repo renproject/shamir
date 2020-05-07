@@ -16,7 +16,7 @@ const VShareSizeBytes = ShareSizeBytes + FnSizeBytes
 type VerifiableShares []VerifiableShare
 
 // SizeHint implements the surge.SizeHinter interface.
-func (vshares VerifiableShares) SizeHint() int { return ShareSizeBytes * len(vshares) }
+func (vshares VerifiableShares) SizeHint() int { return 4 + VShareSizeBytes*len(vshares) }
 
 // Marshal implements the surge.Marshaler interface.
 func (vshares VerifiableShares) Marshal(w io.Writer, m int) (int, error) {
@@ -394,6 +394,7 @@ func (checker *VSSChecker) Marshal(w io.Writer, m int) (int, error) {
 // Unmarshal implements the surge.Unmarshaler interface.
 func (checker *VSSChecker) Unmarshal(r io.Reader, m int) (int, error) {
 	var err error = nil
+	checker.h = curve.New()
 	m, err = checker.h.Unmarshal(r, m)
 	if err != nil {
 		return m, err
@@ -469,6 +470,7 @@ func (s *VSSharer) Unmarshal(r io.Reader, m int) (int, error) {
 		return m, err
 	}
 
+	s.h = curve.New()
 	m, err = s.h.Unmarshal(r, m)
 	if err != nil {
 		return m, err
