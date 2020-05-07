@@ -8,6 +8,10 @@ import (
 	"github.com/renproject/surge"
 )
 
+// UnmarshalSliceLen32 unmarshals a uint32 from the reader and interprets it as
+// a slice length for a slice with elements of size elemSize in bytes. An error
+// will be returned if the unmarshalling fails, or if the slice length is too
+// large.
 func UnmarshalSliceLen32(dst *uint32, elemSize int, r io.Reader, m int) (int, error) {
 	if m < 4 {
 		return m, surge.ErrMaxBytesExceeded
@@ -23,6 +27,7 @@ func UnmarshalSliceLen32(dst *uint32, elemSize int, r io.Reader, m int) (int, er
 	// Number of curve points.
 	l := binary.BigEndian.Uint32(bs[:])
 
+	// Make sure that the multiplication in the next check won't overflow.
 	if uint64(l)*uint64(elemSize) > uint64(^uint32(0)) {
 		return m, errors.New("slice length too large")
 	}
