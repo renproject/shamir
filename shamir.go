@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/renproject/secp256k1-go"
+	"github.com/renproject/shamir/util"
 	"github.com/renproject/surge"
 )
 
@@ -48,24 +49,10 @@ func (shares Shares) Marshal(w io.Writer, m int) (int, error) {
 
 // Unmarshal implements the surge.Unmarshaler interface.
 func (shares *Shares) Unmarshal(r io.Reader, m int) (int, error) {
-	if m < 4 {
-		return m, surge.ErrMaxBytesExceeded
-	}
-
-	var bs [4]byte
-
-	// Slice length.
-	n, err := io.ReadFull(r, bs[:])
-	m -= n
+	var l uint32
+	m, err := util.UnmarshalSliceLen32(&l, ShareSizeBytes, r, m)
 	if err != nil {
 		return m, err
-	}
-	l := binary.BigEndian.Uint32(bs[:])
-	// Casting m (signed) to an unsigned int is safe here. This is because it
-	// is guaranteed to be positive: we check at the start of the function that
-	// m >= 4, and then only subtract n which satisfies n <= 4.
-	if uint32(m) < l*ShareSizeBytes {
-		return m, surge.ErrMaxBytesExceeded
 	}
 
 	*shares = (*shares)[:0]
@@ -246,24 +233,10 @@ func marshalFromIndices(indices []secp256k1.Secp256k1N, w io.Writer, m int) (int
 }
 
 func unmarshalToIndices(dst *[]secp256k1.Secp256k1N, r io.Reader, m int) (int, error) {
-	if m < 4 {
-		return m, surge.ErrMaxBytesExceeded
-	}
-
-	var bs [4]byte
-
-	// Slice length.
-	n, err := io.ReadFull(r, bs[:])
-	m -= n
+	var l uint32
+	m, err := util.UnmarshalSliceLen32(&l, FnSizeBytes, r, m)
 	if err != nil {
 		return m, err
-	}
-	l := binary.BigEndian.Uint32(bs[:])
-	// Casting m (signed) to an unsigned int is safe here. This is because it
-	// is guaranteed to be positive: we check at the start of the function that
-	// m >= 4, and then only subtract n which satisfies n <= 4.
-	if uint32(m) < l*FnSizeBytes {
-		return m, surge.ErrMaxBytesExceeded
 	}
 
 	*dst = (*dst)[:0]
