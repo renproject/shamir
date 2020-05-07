@@ -6,6 +6,7 @@ import (
 
 	"github.com/renproject/secp256k1-go"
 	"github.com/renproject/shamir/curve"
+	"github.com/renproject/shamir/util"
 	"github.com/renproject/surge"
 )
 
@@ -16,7 +17,7 @@ const VShareSizeBytes = ShareSizeBytes + FnSizeBytes
 type VerifiableShares []VerifiableShare
 
 // SizeHint implements the surge.SizeHinter interface.
-func (vshares VerifiableShares) SizeHint() int { return ShareSizeBytes * len(vshares) }
+func (vshares VerifiableShares) SizeHint() int { return 4 + VShareSizeBytes*len(vshares) }
 
 // Marshal implements the surge.Marshaler interface.
 func (vshares VerifiableShares) Marshal(w io.Writer, m int) (int, error) {
@@ -25,7 +26,6 @@ func (vshares VerifiableShares) Marshal(w io.Writer, m int) (int, error) {
 	}
 
 	var bs [4]byte
-
 	binary.BigEndian.PutUint32(bs[:], uint32(len(vshares)))
 	n, err := w.Write(bs[:])
 	m -= n
@@ -45,24 +45,10 @@ func (vshares VerifiableShares) Marshal(w io.Writer, m int) (int, error) {
 
 // Unmarshal implements the surge.Unmarshaler interface.
 func (vshares *VerifiableShares) Unmarshal(r io.Reader, m int) (int, error) {
-	if m < 4 {
-		return m, surge.ErrMaxBytesExceeded
-	}
-
-	var bs [4]byte
-
-	// Slice length.
-	n, err := io.ReadFull(r, bs[:])
-	m -= n
+	var l uint32
+	m, err := util.UnmarshalSliceLen32(&l, VShareSizeBytes, r, m)
 	if err != nil {
 		return m, err
-	}
-	l := binary.BigEndian.Uint32(bs[:])
-	// Casting m (signed) to an unsigned int is safe here. This is because it
-	// is guaranteed to be positive: we check at the start of the function that
-	// m >= 4, and then only subtract n which satisfies n <= 4.
-	if uint32(m) < l*VShareSizeBytes {
-		return m, surge.ErrMaxBytesExceeded
 	}
 
 	*vshares = (*vshares)[:0]
@@ -272,25 +258,14 @@ func (c *Commitment) Marshal(w io.Writer, m int) (int, error) {
 
 // Unmarshal implements the surge.Unmarshaler interface.
 func (c *Commitment) Unmarshal(r io.Reader, m int) (int, error) {
-	if m < 4 {
-		return m, surge.ErrMaxBytesExceeded
-	}
-
-	var bs [4]byte
-	n, err := io.ReadFull(r, bs[:])
-	m -= n
+	var l uint32
+	m, err := util.UnmarshalSliceLen32(&l, curve.PointSizeBytes, r, m)
 	if err != nil {
 		return m, err
 	}
 
-	// Number of curve points.
-	l := binary.BigEndian.Uint32(bs[:])
-	if m < int(l*curve.PointSizeBytes) {
-		return m, surge.ErrMaxBytesExceeded
-	}
-
 	c.points = c.points[:0]
-	for i := 0; i < int(l); i++ {
+	for i := uint32(0); i < l; i++ {
 		c.points = append(c.points, curve.New())
 		m, err = c.points[i].Unmarshal(r, m)
 		if err != nil {
@@ -394,6 +369,7 @@ func (checker *VSSChecker) Marshal(w io.Writer, m int) (int, error) {
 // Unmarshal implements the surge.Unmarshaler interface.
 func (checker *VSSChecker) Unmarshal(r io.Reader, m int) (int, error) {
 	var err error = nil
+	checker.h = curve.New()
 	m, err = checker.h.Unmarshal(r, m)
 	if err != nil {
 		return m, err
@@ -469,6 +445,7 @@ func (s *VSSharer) Unmarshal(r io.Reader, m int) (int, error) {
 		return m, err
 	}
 
+	s.h = curve.New()
 	m, err = s.h.Unmarshal(r, m)
 	if err != nil {
 		return m, err
