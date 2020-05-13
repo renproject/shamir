@@ -196,7 +196,7 @@ func (c *Commitment) Len() int {
 	return len(c.points)
 }
 
-// Set sets the calling commitment to be equal to the given commitment.
+// Set the calling commitment to be equal to the given commitment.
 func (c *Commitment) Set(other Commitment) {
 	if len(c.points) < len(other.points) {
 		*c = NewCommitmentWithCapacity(len(other.points))
