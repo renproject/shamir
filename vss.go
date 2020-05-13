@@ -196,6 +196,18 @@ func (c *Commitment) Len() int {
 	return len(c.points)
 }
 
+// Set the calling commitment to be equal to the given commitment.
+func (c *Commitment) Set(other Commitment) {
+	if len(c.points) < len(other.points) {
+		*c = NewCommitmentWithCapacity(len(other.points))
+	}
+
+	c.points = c.points[:len(other.points)]
+	for i := range c.points {
+		c.points[i].Set(&other.points[i])
+	}
+}
+
 // GetBytes serialises the commitment into bytes and writes these bytes into
 // the given destination slice.
 //

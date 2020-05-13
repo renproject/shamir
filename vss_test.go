@@ -451,6 +451,16 @@ var _ = Describe("Verifiable secret sharing", func() {
 			}
 		})
 
+		Specify("setting a commitment should make it equal to the argument", func() {
+			for i := 0; i < trials; i++ {
+				k := rand.Intn(maxK) + 1
+				RandomiseCommitment(&com1, k)
+				com2.Set(com1)
+
+				Expect(com1.Eq(&com2)).To(BeTrue())
+			}
+		})
+
 		//
 		// Marshalling
 		//
