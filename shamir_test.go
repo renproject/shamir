@@ -59,9 +59,11 @@ var _ = Describe("Shamir Secret Sharing", func() {
 				err := sharer.Share(&shares, secret, k)
 				Expect(err).ToNot(HaveOccurred())
 
-				Expect(
-					SharesAreConsistent(shares, secret, &reconstructor, k, 100),
-				).To(BeTrue())
+				recon, err := reconstructor.Open(shares)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(recon.Eq(&secret)).To(BeTrue())
+
+				Expect(SharesAreConsistent(shares, &reconstructor, k)).To(BeTrue())
 			}
 		})
 	})
@@ -97,9 +99,11 @@ var _ = Describe("Shamir Secret Sharing", func() {
 					sharesSummed[i].Add(&shares1[i], &shares2[i])
 				}
 
-				Expect(
-					SharesAreConsistent(sharesSummed, secretSummed, &reconstructor, kmax, 100),
-				).To(BeTrue())
+				recon, err := reconstructor.Open(sharesSummed)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(recon.Eq(&secretSummed)).To(BeTrue())
+
+				Expect(SharesAreConsistent(sharesSummed, &reconstructor, kmax)).To(BeTrue())
 			}
 		})
 	})
@@ -133,9 +137,11 @@ var _ = Describe("Shamir Secret Sharing", func() {
 						sharesScaled[i].Scale(&shares[i], &scale)
 					}
 
-					Expect(
-						SharesAreConsistent(sharesScaled, secretScaled, &reconstructor, k, 100),
-					).To(BeTrue())
+					recon, err := reconstructor.Open(sharesScaled)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(recon.Eq(&secretScaled)).To(BeTrue())
+
+					Expect(SharesAreConsistent(sharesScaled, &reconstructor, k)).To(BeTrue())
 				}
 			},
 		)
@@ -530,9 +536,11 @@ var _ = Describe("Shamir Secret Sharing", func() {
 				err = sharer.Share(&shares, secret, k)
 				Expect(err).ToNot(HaveOccurred())
 
-				Expect(
-					SharesAreConsistent(shares, secret, &reconstructor, k, 100),
-				).To(BeTrue())
+				recon, err := reconstructor.Open(shares)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(recon.Eq(&secret)).To(BeTrue())
+
+				Expect(SharesAreConsistent(shares, &reconstructor, k)).To(BeTrue())
 			}
 		})
 
@@ -764,9 +772,11 @@ var _ = Describe("Shamir Secret Sharing", func() {
 				err = surge.FromBinary(bs[:], &reconstructor)
 				Expect(err).ToNot(HaveOccurred())
 
-				Expect(
-					SharesAreConsistent(shares, secret, &reconstructor, k, 100),
-				).To(BeTrue())
+				recon, err := reconstructor.Open(shares)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(recon.Eq(&secret)).To(BeTrue())
+
+				Expect(SharesAreConsistent(shares, &reconstructor, k)).To(BeTrue())
 			}
 		})
 

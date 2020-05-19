@@ -61,16 +61,17 @@ func AddDuplicateIndex(shares shamir.Shares) {
 // an error is returned. Otherwise, the function will return true.
 //
 // NOTE: This function modifies the order of the shares in the given slice.
-func SharesAreConsistent(
-	shares shamir.Shares,
-	secret secp256k1.Secp256k1N,
-	reconstructor *shamir.Reconstructor,
-	k, trials int,
-) bool {
-	for i := 0; i < trials; i++ {
-		Shuffle(shares)
-		extra := RandRange(0, len(shares)-k)
-		recon, err := reconstructor.Open(shares[:k+extra])
+func SharesAreConsistent(shares shamir.Shares, reconstructor *shamir.Reconstructor, k int) bool {
+	if len(shares) < k {
+		return true
+	}
+
+	secret, err := reconstructor.Open(shares[:k])
+	if err != nil {
+		return false
+	}
+	for i := 1; i <= len(shares)-k; i++ {
+		recon, err := reconstructor.Open(shares[i : i+k])
 		if err != nil || !recon.Eq(&secret) {
 			return false
 		}
@@ -114,17 +115,6 @@ func PerturbDecommitment(vs *shamir.VerifiableShare) {
 
 // VsharesAreConsistent is a wrapper around SharesAreConsistent for the
 // VerifiableShares type.
-func VsharesAreConsistent(
-	vshares shamir.VerifiableShares,
-	secret secp256k1.Secp256k1N,
-	reconstructor *shamir.Reconstructor,
-	k, trials int,
-) bool {
-	shares := make(shamir.Shares, len(vshares))
-
-	for i, vshare := range vshares {
-		shares[i] = vshare.Share()
-	}
-
-	return SharesAreConsistent(shares, secret, reconstructor, k, trials)
+func VsharesAreConsistent(vshares shamir.VerifiableShares, reconstructor *shamir.Reconstructor, k int) bool {
+	return SharesAreConsistent(vshares.Shares(), reconstructor, k)
 }

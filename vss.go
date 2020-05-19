@@ -63,6 +63,17 @@ func (vshares *VerifiableShares) Unmarshal(r io.Reader, m int) (int, error) {
 	return m, nil
 }
 
+// Shares returns the underlying (unverified) shares.
+func (vshares VerifiableShares) Shares() Shares {
+	shares := make(Shares, len(vshares))
+
+	for i, vshare := range vshares {
+		shares[i] = vshare.Share()
+	}
+
+	return shares
+}
+
 // A VerifiableShare is a Share but with additional information that allows it
 // to be verified as correct for a given commitment to a sharing.
 type VerifiableShare struct {
