@@ -54,23 +54,19 @@ func AddDuplicateIndex(shares shamir.Shares) {
 }
 
 // SharesAreConsistent returns true if the given shares are found to be
-// consistent with the given secret after `trials` trials. Consistency is
-// checked as follows. For each trial, a random subset of size at least k is
-// picked, and then this subset is used to reconstruct a value. If the
-// reconstruction returns an error, or if the value is not equal to the secret,
-// an error is returned. Otherwise, the function will return true.
-//
-// NOTE: This function modifies the order of the shares in the given slice.
-func SharesAreConsistent(
-	shares shamir.Shares,
-	secret secp256k1.Secp256k1N,
-	reconstructor *shamir.Reconstructor,
-	k, trials int,
-) bool {
-	for i := 0; i < trials; i++ {
-		Shuffle(shares)
-		extra := RandRange(0, len(shares)-k)
-		recon, err := reconstructor.Open(shares[:k+extra])
+// consistent. Consistency is defined as all points lying on some polynomial of
+// degree less than `k`.
+func SharesAreConsistent(shares shamir.Shares, reconstructor *shamir.Reconstructor, k int) bool {
+	if len(shares) < k {
+		return true
+	}
+
+	secret, err := reconstructor.Open(shares[:k])
+	if err != nil {
+		return false
+	}
+	for i := 1; i <= len(shares)-k; i++ {
+		recon, err := reconstructor.Open(shares[i : i+k])
 		if err != nil || !recon.Eq(&secret) {
 			return false
 		}
@@ -114,17 +110,6 @@ func PerturbDecommitment(vs *shamir.VerifiableShare) {
 
 // VsharesAreConsistent is a wrapper around SharesAreConsistent for the
 // VerifiableShares type.
-func VsharesAreConsistent(
-	vshares shamir.VerifiableShares,
-	secret secp256k1.Secp256k1N,
-	reconstructor *shamir.Reconstructor,
-	k, trials int,
-) bool {
-	shares := make(shamir.Shares, len(vshares))
-
-	for i, vshare := range vshares {
-		shares[i] = vshare.Share()
-	}
-
-	return SharesAreConsistent(shares, secret, reconstructor, k, trials)
+func VsharesAreConsistent(vshares shamir.VerifiableShares, reconstructor *shamir.Reconstructor, k int) bool {
+	return SharesAreConsistent(vshares.Shares(), reconstructor, k)
 }
