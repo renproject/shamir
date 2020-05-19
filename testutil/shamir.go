@@ -54,13 +54,8 @@ func AddDuplicateIndex(shares shamir.Shares) {
 }
 
 // SharesAreConsistent returns true if the given shares are found to be
-// consistent with the given secret after `trials` trials. Consistency is
-// checked as follows. For each trial, a random subset of size at least k is
-// picked, and then this subset is used to reconstruct a value. If the
-// reconstruction returns an error, or if the value is not equal to the secret,
-// an error is returned. Otherwise, the function will return true.
-//
-// NOTE: This function modifies the order of the shares in the given slice.
+// consistent. Consistency is defined as all points lying on some polynomial of
+// degree less than `k`.
 func SharesAreConsistent(shares shamir.Shares, reconstructor *shamir.Reconstructor, k int) bool {
 	if len(shares) < k {
 		return true
