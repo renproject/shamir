@@ -249,10 +249,10 @@ func (c *Commitment) SetBytes(bs []byte) {
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (c *Commitment) SizeHint() int { return curve.PointSizeBytes*len(c.points) + 4 }
+func (c Commitment) SizeHint() int { return curve.PointSizeBytes*len(c.points) + 4 }
 
 // Marshal implements the surge.Marshaler interface.
-func (c *Commitment) Marshal(w io.Writer, m int) (int, error) {
+func (c Commitment) Marshal(w io.Writer, m int) (int, error) {
 	if m < 4 {
 		return m, surge.ErrMaxBytesExceeded
 	}
