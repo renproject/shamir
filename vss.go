@@ -219,6 +219,16 @@ func (c *Commitment) Set(other Commitment) {
 	}
 }
 
+// GetPoint returns the elliptic curve point at the given index of the commitment
+func (c Commitment) GetPoint(index int) curve.Point {
+	return c.points[index]
+}
+
+// AppendPoint appends an elliptic curve point to the given commitment
+func (c *Commitment) AppendPoint(point curve.Point) {
+	c.points = append(c.points, point)
+}
+
 // GetBytes serialises the commitment into bytes and writes these bytes into
 // the given destination slice.
 //
