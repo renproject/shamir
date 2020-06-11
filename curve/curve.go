@@ -16,12 +16,13 @@ const PointSizeBytes = 64
 
 // Point represents a point on the secp256k1 elliptice curve.
 type Point struct {
-	x, y *big.Int
+	x, y       *big.Int
+	isInfinity bool
 }
 
 // String implements the Stringer interface.
 func (p Point) String() string {
-	return fmt.Sprintf("(%v, %v)", p.x, p.y)
+	return fmt.Sprintf("(%v, %v, %v)", p.x, p.y, p.isInfinity)
 }
 
 // GetBytes serialises the curve point into bytes and writes these bytes into
@@ -116,7 +117,13 @@ func (p *Point) Unmarshal(r io.Reader, m int) (int, error) {
 // New constructs a new curve point.
 func New() Point {
 	x, y := big.NewInt(0), big.NewInt(0)
-	return Point{x, y}
+	return Point{x, y, false}
+}
+
+// Infinity constructs a point at infinity
+func Infinity() Point {
+	x, y := big.NewInt(0), big.NewInt(0)
+	return Point{x, y, true}
 }
 
 // NewFromCoords constructs a new curve point from the given x and y
@@ -124,11 +131,12 @@ func New() Point {
 //
 // NOTE: This function does not check that the point is actually on the curve.
 func NewFromCoords(x, y *big.Int) Point {
-	return Point{x, y}
+	return Point{x, y, false}
 }
 
 // IsOnCurve returns true if the x and y coordinates of the caller lie on the
 // secp256k1 elliptic curve, and false otherwise.
+// TODO: should we simply return true if the point is point at infinity?
 func (p *Point) IsOnCurve() bool {
 	return ec.S256().IsOnCurve(p.x, p.y)
 }
@@ -137,10 +145,15 @@ func (p *Point) IsOnCurve() bool {
 func (p *Point) Set(other *Point) {
 	p.x.Set(other.x)
 	p.y.Set(other.y)
+	p.isInfinity = other.isInfinity
 }
 
 // Eq returns true if the two curve points are equal, and false otherwise.
 func (p *Point) Eq(other *Point) bool {
+	if p.isInfinity && other.isInfinity {
+		return true
+	}
+
 	return p.x.Cmp(other.x) == 0 && p.y.Cmp(other.y) == 0
 }
 
@@ -150,23 +163,55 @@ func (p *Point) Eq(other *Point) bool {
 func (p *Point) BaseExp(bs [32]byte) {
 	// FIXME: Handle the case where the exponent is zero.
 	p.x, p.y = ec.S256().ScalarBaseMult(bs[:])
+	p.isInfinity = false
 }
 
 // Add computes the curve addition of the two given curve points and stores the
 // result in the caller.
 func (p *Point) Add(a, b *Point) {
+	if a.isInfinity && !b.isInfinity {
+		p.x = b.x
+		p.y = b.y
+		p.isInfinity = false
+		return
+	}
+
+	if !a.isInfinity && b.isInfinity {
+		p.x = a.x
+		p.y = a.y
+		p.isInfinity = false
+		return
+	}
+
+	if a.isInfinity && b.isInfinity {
+		inf := Infinity()
+		p.x = inf.x
+		p.y = inf.y
+		p.isInfinity = inf.isInfinity
+		return
+	}
+
 	if a.Eq(b) {
 		p.x, p.y = ec.S256().Double(a.x, a.y)
+		p.isInfinity = false
 		return
 	}
 	p.x, p.y = ec.S256().Add(a.x, a.y, b.x, b.y)
+	p.isInfinity = false
 }
 
 // Scale computes the scalar multiplication of the given curve point and the
 // scalar represented by the given bytes in big endian format, and stores the
 // result in the caller.
 func (p *Point) Scale(other *Point, bs [32]byte) {
+	if other.isInfinity {
+		p.x = other.x
+		p.y = other.y
+		p.isInfinity = other.isInfinity
+	}
+
 	p.x, p.y = ec.S256().ScalarMult(other.x, other.y, bs[:])
+	p.isInfinity = false
 }
 
 // Random returns a random point on the elliptic curve.
