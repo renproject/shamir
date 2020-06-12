@@ -22,7 +22,11 @@ type Point struct {
 
 // String implements the Stringer interface.
 func (p Point) String() string {
-	return fmt.Sprintf("(%v, %v, %v)", p.x, p.y, p.isInfinity)
+	if p.isInfinity {
+		return fmt.Sprintf("Infinity")
+	}
+
+	return fmt.Sprintf("(%v, %v)", p.x, p.y)
 }
 
 // GetBytes serialises the curve point into bytes and writes these bytes into
@@ -38,7 +42,8 @@ func (p *Point) GetBytes(dst []byte) {
 	// - Second 32 bytes: big endian bytes of the y coordinate, left padded
 	// with zeros.
 	// - An addition 1 byte: A boolean value indicating whether this point is
-	// a point at infinity
+	// a point at infinity. This byte is set to 0 if its not the point at infinity.
+	// a non-zero value for bytes[64] indicates a point at infinity
 
 	xBytes := p.x.Bytes()
 	yBytes := p.y.Bytes()
@@ -81,9 +86,9 @@ func (p *Point) SetBytes(bs []byte) {
 	}
 	p.y.SetBytes(bs[i:64])
 
-	p.isInfinity = false
-	if bs[64] == 1 {
-		p.isInfinity = true
+	p.isInfinity = true
+	if bs[64] == 0 {
+		p.isInfinity = false
 	}
 }
 
@@ -192,9 +197,7 @@ func (p *Point) BaseExp(bs [32]byte) {
 	// if the exponent is zero, return the point at infinity
 	if allZero(bs) {
 		pointAtInfinity := Infinity()
-		p.x = pointAtInfinity.x
-		p.y = pointAtInfinity.y
-		p.isInfinity = pointAtInfinity.isInfinity
+		p.Set(&pointAtInfinity)
 		return
 	}
 
@@ -207,26 +210,20 @@ func (p *Point) BaseExp(bs [32]byte) {
 func (p *Point) Add(a, b *Point) {
 	// if point a is point at infinity, and point b is not
 	if a.isInfinity && !b.isInfinity {
-		p.x = b.x
-		p.y = b.y
-		p.isInfinity = false
+		p.Set(b)
 		return
 	}
 
 	// if point b is point at infinity, and point a is not
 	if !a.isInfinity && b.isInfinity {
-		p.x = a.x
-		p.y = a.y
-		p.isInfinity = false
+		p.Set(a)
 		return
 	}
 
 	// if both points are the point at infinity
 	if a.isInfinity && b.isInfinity {
-		inf := Infinity()
-		p.x = inf.x
-		p.y = inf.y
-		p.isInfinity = inf.isInfinity
+		pointAtInfinity := Infinity()
+		p.Set(&pointAtInfinity)
 		return
 	}
 
@@ -244,14 +241,14 @@ func (p *Point) Add(a, b *Point) {
 // Scale computes the scalar multiplication of the given curve point and the
 // scalar represented by the given bytes in big endian format, and stores the
 // result in the caller.
+// If the exponent (bytes) represents a number larger than the order of the
+// Secp256k1 group, this function will not behave correctly
 func (p *Point) Scale(other *Point, bs [32]byte) {
 	// if the exponent is zero, or the point being scaled is the point at infinity
 	// return the point at infinity
 	if allZero(bs) || other.isInfinity {
 		pointAtInfinity := Infinity()
-		p.x = pointAtInfinity.x
-		p.y = pointAtInfinity.y
-		p.isInfinity = pointAtInfinity.isInfinity
+		p.Set(&pointAtInfinity)
 		return
 	}
 

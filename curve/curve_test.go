@@ -121,11 +121,16 @@ var _ = Describe("Secp256k1 Curve", func() {
 			Expect(p.IsOnCurve()).To(BeTrue())
 		})
 
+		Specify("Point at infinity is printed appropriately", func() {
+			p := Infinity()
+			Expect(p.String()).To(Equal("Infinity"))
+		})
+
 		Specify("Adding a point to the point of infinity", func() {
 			p := Infinity()
 			q := Random()
 
-			var r Point
+			r := New()
 			r.Add(&p, &q)
 			Expect(r.Eq(&q)).To(BeTrue())
 
@@ -139,7 +144,7 @@ var _ = Describe("Secp256k1 Curve", func() {
 			q.GetB32(bs[:])
 			p := Infinity()
 
-			var r Point
+			r := New()
 			r.Scale(&p, bs)
 			Expect(r.IsInfinity()).To(BeTrue())
 		})
@@ -148,8 +153,16 @@ var _ = Describe("Secp256k1 Curve", func() {
 			var bs [32]byte
 			p := Random()
 
-			var r Point
+			r := New()
 			r.Scale(&p, bs)
+			Expect(r.IsInfinity()).To(BeTrue())
+		})
+
+		Specify("Scaling the generator with zero exponent", func() {
+			var bs [32]byte
+
+			r := New()
+			r.BaseExp(bs)
 			Expect(r.IsInfinity()).To(BeTrue())
 		})
 	})
