@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"math/rand"
 
+	"github.com/renproject/secp256k1-go"
 	"github.com/renproject/surge"
 
 	. "github.com/onsi/ginkgo"
@@ -27,7 +28,7 @@ var _ = Describe("Secp256k1 Curve", func() {
 
 	Context("Marshaling", func() {
 		trials := 1000
-		var bs [64]byte
+		var bs [PointSizeBytes]byte
 		var p, p1, p2 Point
 
 		BeforeEach(func() {
@@ -53,35 +54,48 @@ var _ = Describe("Secp256k1 Curve", func() {
 			}
 		})
 
-		Specify("unmarhsalling should return an error if the remaining bytes is less than 64", func() {
+		Specify("unmarshalling should return an error if the remaining bytes is less than PointSizeBytes", func() {
 			for i := 0; i < trials; i++ {
 				buf := bytes.NewBuffer(bs[:])
-				max := rand.Intn(64)
+				max := rand.Intn(PointSizeBytes)
 				m, err := p.Unmarshal(buf, max)
 				Expect(err).To(HaveOccurred())
 				Expect(m).To(Equal(max))
 			}
 		})
 
-		Specify("unmarhsalling should return an error if the reader doesn't have enough data", func() {
+		Specify("unmarshalling should return an error if the reader doesn't have enough data", func() {
 			for i := 0; i < trials; i++ {
-				max := rand.Intn(64)
+				max := rand.Intn(PointSizeBytes)
 				buf := bytes.NewBuffer(bs[:max])
-				m, err := p.Unmarshal(buf, 64)
+				m, err := p.Unmarshal(buf, PointSizeBytes)
 				Expect(err).To(HaveOccurred())
-				Expect(m).To(Equal(64 - max))
+				Expect(m).To(Equal(PointSizeBytes - max))
 			}
 		})
 
-		Specify("unmarhsalling should return an error if the data doesn't represent a curve point", func() {
+		Specify("unmarshalling should return an error if the data doesn't represent a curve point", func() {
 			for i := 0; i < trials; i++ {
-				// The probability that a random 64 bytes will represent a
+				// The probability that a random 65 bytes will represent a
 				// point on the curve is negligible.
+				// Also mark the point as NOT the point at infinity
 				rand.Read(bs[:])
+				bs[PointSizeBytes-1] = 0
+
 				buf := bytes.NewBuffer(bs[:])
-				m, err := p.Unmarshal(buf, 64)
+				m, err := p.Unmarshal(buf, PointSizeBytes)
 				Expect(err).To(HaveOccurred())
 				Expect(m).To(Equal(0))
+			}
+		})
+
+		Specify("marshal and unmarshal the point at infinity", func() {
+			for i := 0; i < trials; i++ {
+				p1 = Infinity()
+				p1.GetBytes(bs[:])
+				p2.SetBytes(bs[:])
+				Expect(p2.Eq(&p1)).To(BeTrue())
+				Expect(p2.IsInfinity()).To(BeTrue())
 			}
 		})
 	})
@@ -94,6 +108,49 @@ var _ = Describe("Secp256k1 Curve", func() {
 		Specify("PointSizeBytes should have correct value", func() {
 			p := New()
 			Expect(PointSizeBytes).To(Equal(p.SizeHint()))
+		})
+	})
+
+	//
+	// Point at infinity
+	//
+
+	Context("Point at infinity", func() {
+		Specify("Point at infinity is on the curve", func() {
+			p := Infinity()
+			Expect(p.IsOnCurve()).To(BeTrue())
+		})
+
+		Specify("Adding a point to the point of infinity", func() {
+			p := Infinity()
+			q := Random()
+
+			var r Point
+			r.Add(&p, &q)
+			Expect(r.Eq(&q)).To(BeTrue())
+
+			r.Add(&q, &p)
+			Expect(r.Eq(&q)).To(BeTrue())
+		})
+
+		Specify("Scaling a point at infinity", func() {
+			var bs [32]byte
+			q := secp256k1.RandomSecp256k1N()
+			q.GetB32(bs[:])
+			p := Infinity()
+
+			var r Point
+			r.Scale(&p, bs)
+			Expect(r.IsInfinity()).To(BeTrue())
+		})
+
+		Specify("Scaling a point with zero exponent", func() {
+			var bs [32]byte
+			p := Random()
+
+			var r Point
+			r.Scale(&p, bs)
+			Expect(r.IsInfinity()).To(BeTrue())
 		})
 	})
 })
