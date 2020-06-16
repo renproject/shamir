@@ -123,7 +123,7 @@ var _ = Describe("Secp256k1 Curve", func() {
 
 		Specify("Point at infinity is printed appropriately", func() {
 			p := Infinity()
-			Expect(p.String()).To(Equal("Infinity"))
+			Expect(p.String()).To(Equal("inf"))
 		})
 
 		Specify("Adding a point to the point of infinity", func() {

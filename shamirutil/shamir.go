@@ -1,4 +1,4 @@
-package testutil
+package shamirutil
 
 import (
 	"math/rand"

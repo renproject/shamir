@@ -14,7 +14,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/renproject/shamir"
-	. "github.com/renproject/shamir/testutil"
+	. "github.com/renproject/shamir/shamirutil"
 )
 
 // The key properties of verifiable secret sharing is that it is the same as
