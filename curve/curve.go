@@ -23,7 +23,7 @@ type Point struct {
 // String implements the Stringer interface.
 func (p Point) String() string {
 	if p.isInfinity {
-		return fmt.Sprintf("Infinity")
+		return fmt.Sprintf("inf")
 	}
 
 	return fmt.Sprintf("(%v, %v)", p.x, p.y)
