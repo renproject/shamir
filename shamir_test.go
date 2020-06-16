@@ -189,6 +189,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			for i := 0; i < trials; i++ {
 				index = secp256k1.RandomSecp256k1N()
 				value = secp256k1.RandomSecp256k1N()
+				scale = secp256k1.RandomSecp256k1N()
 				prod.Mul(&value, &scale)
 
 				// The resulting share should have the value scaled and the
