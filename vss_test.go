@@ -56,6 +56,15 @@ var _ = Describe("Verifiable secret sharing", func() {
 	// testing this obivously does not matter.
 	h := curve.Random()
 
+	randomInvalidCurvePoint := func(bs []byte) {
+		// The data is just that of a curve point. The probability that a
+		// random 64 bytes will represent a point on the curve is negligible.
+		rand.Read(bs[:64])
+
+		// Make sure that it does not represent the point at infinity.
+		bs[64] = 0
+	}
+
 	Context("Correctness (1)", func() {
 		trials := 20
 		n := 20
@@ -469,6 +478,24 @@ var _ = Describe("Verifiable secret sharing", func() {
 			}
 		})
 
+		Specify("accessing and appending elements should work correctly", func() {
+			points := make([]curve.Point, maxK)
+
+			for i := 0; i < trials; i++ {
+				k := rand.Intn(maxK) + 1
+				com := NewCommitmentWithCapacity(k)
+				for j := 0; j < k; j++ {
+					points[j] = curve.Random()
+					com.AppendPoint(points[j])
+				}
+
+				for j := 0; j < k; j++ {
+					p := com.GetPoint(j)
+					Expect(p.Eq(&points[j])).To(BeTrue())
+				}
+			}
+		})
+
 		//
 		// Marshalling
 		//
@@ -602,13 +629,13 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 			Specify("unmarhsalling should return an error if the data doesn't represent a curve point", func() {
 				for i := 0; i < trials; i++ {
-					// The probability that a random 64 bytes will represent a
-					// point on the curve is negligible.
-					rand.Read(bs[:])
-
 					// Make sure that the slice length data is valid so that it
 					// can proceed to unmarshalling the curve points.
 					binary.BigEndian.PutUint32(bs[:4], uint32(maxK))
+
+					for j := 0; j < maxK; j++ {
+						randomInvalidCurvePoint(bs[4+j*curve.PointSizeBytes:])
+					}
 
 					buf := bytes.NewBuffer(bs[:])
 					m, err := com.Unmarshal(buf, curve.PointSizeBytes*maxK+4)
@@ -934,10 +961,8 @@ var _ = Describe("Verifiable secret sharing", func() {
 			var bs [curve.PointSizeBytes]byte
 
 			for i := 0; i < trials; i++ {
-				// The data is just that of a curve point. The probability that
-				// a random 64 bytes will represent a point on the curve is
-				// negligible.
-				rand.Read(bs[:])
+				randomInvalidCurvePoint(bs[:])
+
 				buf := bytes.NewBuffer(bs[:])
 				m, err := checker.Unmarshal(buf, curve.PointSizeBytes)
 				Expect(err).To(HaveOccurred())
