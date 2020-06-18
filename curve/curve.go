@@ -78,7 +78,7 @@ func (p *Point) SetBytes(bs []byte) {
 	p.x.SetBytes(bs[i:32])
 
 	i = 32
-	for _, b := range bs[32:] {
+	for _, b := range bs[32:64] {
 		if b != 0 {
 			break
 		}
@@ -93,10 +93,10 @@ func (p *Point) SetBytes(bs []byte) {
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (p *Point) SizeHint() int { return PointSizeBytes }
+func (p Point) SizeHint() int { return PointSizeBytes }
 
 // Marshal implements the surge.Marshaler interface.
-func (p *Point) Marshal(w io.Writer, m int) (int, error) {
+func (p Point) Marshal(w io.Writer, m int) (int, error) {
 	if m < PointSizeBytes {
 		return m, surge.ErrMaxBytesExceeded
 	}
