@@ -13,7 +13,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/renproject/shamir"
-	. "github.com/renproject/shamir/testutil"
+	. "github.com/renproject/shamir/shamirutil"
 )
 
 //
