@@ -1,14 +1,12 @@
 package shamir_test
 
 import (
-	"bytes"
 	"encoding/binary"
 	"math/rand"
 	"testing"
 	"time"
 
-	"github.com/renproject/secp256k1-go"
-	"github.com/renproject/shamir/curve"
+	"github.com/renproject/secp256k1"
 	"github.com/renproject/surge"
 
 	. "github.com/onsi/ginkgo"
@@ -54,7 +52,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 	// at random. Note that in practice it is crucial that no one knows
 	// log_g(h), that is, no one should know a number x such that h = g^x. For
 	// testing this obivously does not matter.
-	h := curve.Random()
+	h := secp256k1.RandomPoint()
 
 	randomInvalidCurvePoint := func(bs []byte) {
 		// The data is just that of a curve point. The probability that a
@@ -70,7 +68,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		n := 20
 
 		var k int
-		var secret secp256k1.Secp256k1N
+		var secret secp256k1.Fn
 
 		indices := RandomIndices(n)
 		vshares := make(VerifiableShares, n)
@@ -82,7 +80,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 			for i := 0; i < trials; i++ {
 				// Create a random sharing.
 				k = RandRange(1, n)
-				secret = secp256k1.RandomSecp256k1N()
+				secret = secp256k1.RandomFn()
 				err := vssharer.Share(&vshares, &c, secret, k)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -106,12 +104,12 @@ var _ = Describe("Verifiable secret sharing", func() {
 		n := 20
 
 		var k, badInd int
-		var indices []secp256k1.Secp256k1N
+		var indices []secp256k1.Fn
 		var vshares VerifiableShares
 		var c Commitment
 		var vssharer VSSharer
 		var checker VSSChecker
-		var secret secp256k1.Secp256k1N
+		var secret secp256k1.Fn
 
 		BeforeEach(func() {
 			indices = RandomIndices(n)
@@ -124,7 +122,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		ShareAndCheckWithPerturbed := func(kLower int, perturbShare func(vs *VerifiableShare)) {
 			for i := 0; i < trials; i++ {
 				k = RandRange(kLower, n)
-				secret = secp256k1.RandomSecp256k1N()
+				secret = secp256k1.RandomFn()
 				err := vssharer.Share(&vshares, &c, secret, k)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -172,12 +170,12 @@ var _ = Describe("Verifiable secret sharing", func() {
 		n := 20
 
 		var k1, k2, kmax int
-		var indices []secp256k1.Secp256k1N
+		var indices []secp256k1.Fn
 		var vshares1, vshares2, vsharesSummed VerifiableShares
 		var c1, c2, cSummed Commitment
 		var vssharer VSSharer
 		var checker VSSChecker
-		var secret1, secret2, secretSummed secp256k1.Secp256k1N
+		var secret1, secret2, secretSummed secp256k1.Fn
 
 		BeforeEach(func() {
 			indices = RandomIndices(n)
@@ -195,8 +193,8 @@ var _ = Describe("Verifiable secret sharing", func() {
 			k1 = RandRange(kLower, n)
 			k2 = RandRange(kLower, n)
 			kmax = Max(k1, k2)
-			secret1 = secp256k1.RandomSecp256k1N()
-			secret2 = secp256k1.RandomSecp256k1N()
+			secret1 = secp256k1.RandomFn()
+			secret2 = secp256k1.RandomFn()
 			secretSummed.Add(&secret1, &secret2)
 			_ = vssharer.Share(&vshares1, &c1, secret1, k1)
 			_ = vssharer.Share(&vshares2, &c2, secret2, k2)
@@ -291,12 +289,12 @@ var _ = Describe("Verifiable secret sharing", func() {
 		n := 20
 
 		var k int
-		var indices []secp256k1.Secp256k1N
+		var indices []secp256k1.Fn
 		var vshares, vsharesScaled VerifiableShares
 		var c, cScaled Commitment
 		var vssharer VSSharer
 		var checker VSSChecker
-		var secret, scale, secretScaled secp256k1.Secp256k1N
+		var secret, scale, secretScaled secp256k1.Fn
 
 		BeforeEach(func() {
 			indices = RandomIndices(n)
@@ -310,8 +308,8 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 		CreateShares := func(kLower int) {
 			k = RandRange(kLower, n)
-			secret = secp256k1.RandomSecp256k1N()
-			scale = secp256k1.RandomSecp256k1N()
+			secret = secp256k1.RandomFn()
+			scale = secp256k1.RandomFn()
 			secretScaled.Mul(&secret, &scale)
 			_ = vssharer.Share(&vshares, &c, secret, k)
 
@@ -397,7 +395,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 		indices := RandomIndices(n)
 		vsharer := NewVSSharer(indices, h)
 
-		err := vsharer.Share(nil, nil, secp256k1.Secp256k1N{}, n+1)
+		err := vsharer.Share(nil, nil, secp256k1.Fn{}, n+1)
 		Expect(err).To(HaveOccurred())
 	})
 
@@ -406,7 +404,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 		var trials int
 		var com, com1, com2 Commitment
-		var bs [curve.PointSizeBytes*maxK + 4]byte
+		var bs [secp256k1.PointSize*maxK + 4]byte
 
 		BeforeEach(func() {
 			trials = 100
@@ -416,17 +414,17 @@ var _ = Describe("Verifiable secret sharing", func() {
 		})
 
 		RandomCommitmentBytes := func(dst []byte, k int) {
-			var point curve.Point
+			var point secp256k1.Point
 			binary.BigEndian.PutUint32(dst[:4], uint32(k))
 			for i := 0; i < k; i++ {
-				point = curve.Random()
-				point.GetBytes(dst[4+i*curve.PointSizeBytes:])
+				point = secp256k1.RandomPoint()
+				point.PutBytes(dst[4+i*secp256k1.PointSize:])
 			}
 		}
 
 		var RandomiseCommitment func(*Commitment, int)
 		{
-			var tmpBs [curve.PointSizeBytes*maxK + 4]byte
+			var tmpBs [secp256k1.PointSize*maxK + 4]byte
 			RandomiseCommitment = func(dst *Commitment, k int) {
 				RandomCommitmentBytes(tmpBs[:], k)
 				dst.SetBytes(tmpBs[:])
@@ -479,13 +477,13 @@ var _ = Describe("Verifiable secret sharing", func() {
 		})
 
 		Specify("accessing and appending elements should work correctly", func() {
-			points := make([]curve.Point, maxK)
+			points := make([]secp256k1.Point, maxK)
 
 			for i := 0; i < trials; i++ {
 				k := rand.Intn(maxK) + 1
 				com := NewCommitmentWithCapacity(k)
 				for j := 0; j < k; j++ {
-					points[j] = curve.Random()
+					points[j] = secp256k1.RandomPoint()
 					com.AppendPoint(points[j])
 				}
 
@@ -505,8 +503,8 @@ var _ = Describe("Verifiable secret sharing", func() {
 				for i := 0; i < trials; i++ {
 					k := rand.Intn(maxK) + 1
 					RandomiseCommitment(&com1, k)
-					nBytes := curve.PointSizeBytes*com1.Len() + 4
-					com1.GetBytes(bs[:nBytes])
+					nBytes := secp256k1.PointSize*com1.Len() + 4
+					com1.PutBytes(bs[:nBytes])
 					com2.SetBytes(bs[:nBytes])
 					Expect(com1.Eq(&com2)).To(BeTrue())
 				}
@@ -518,19 +516,17 @@ var _ = Describe("Verifiable secret sharing", func() {
 					RandomiseCommitment(&com1, k)
 					bs, err := surge.ToBinary(&com1)
 					Expect(err).ToNot(HaveOccurred())
-					surge.FromBinary(bs, &com2)
+					surge.FromBinary(&com2, bs)
 					Expect(com1.Eq(&com2)).To(BeTrue())
 				}
 			})
 
 			It("should be able to unmarshal into an empty struct", func() {
-				buf := bytes.NewBuffer(bs[:])
-				buf.Reset()
 				RandomiseCommitment(&com1, maxK)
 				com2 := Commitment{}
 
-				_, _ = com1.Marshal(buf, com1.SizeHint())
-				m, err := com2.Unmarshal(buf, com1.SizeHint())
+				_, _, _ = com1.Marshal(bs[:], com1.SizeHint())
+				_, m, err := com2.Unmarshal(bs[:], com1.SizeHint())
 				Expect(err).ToNot(HaveOccurred())
 				Expect(m).To(Equal(0))
 				Expect(com1.Eq(&com2)).To(BeTrue())
@@ -539,7 +535,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 			It("should error if marshalling fails", func() {
 				k := rand.Intn(maxK) + 1
 				RandomiseCommitment(&com, k)
-				buf := bytes.NewBuffer(bs[:])
 
 				for i := 0; i < trials; i++ {
 					//
@@ -548,14 +543,13 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 					// Writer not big enough.
 					max := rand.Intn(4)
-					w := NewBoundedWriter(max)
-					rem, err := com.Marshal(&w, com.SizeHint())
+					_, rem, err := com.Marshal(bs[:], com.SizeHint())
 					Expect(err).To(HaveOccurred())
 					Expect(rem).To(Equal(com.SizeHint() - max))
 
 					// Max not big enough.
 					max = rand.Intn(4)
-					rem, err = com.Marshal(buf, max)
+					_, rem, err = com.Marshal(bs[:], max)
 					Expect(err).To(HaveOccurred())
 					Expect(rem).To(Equal(max))
 
@@ -565,27 +559,25 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 					// Writer not big enough.
 					max = RandRange(4, com.SizeHint()-1)
-					w = NewBoundedWriter(max)
-					rem, err = com.Marshal(&w, com.SizeHint())
+					_, rem, err = com.Marshal(bs[:], com.SizeHint())
 					Expect(err).To(HaveOccurred())
 					Expect(rem).To(Equal(com.SizeHint() - max))
 
 					// Max not big enough.
 					max = RandRange(4, com.SizeHint()-1)
-					rem, err = com.Marshal(buf, max)
+					_, rem, err = com.Marshal(bs[:], max)
 					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal((max - 4) % curve.PointSizeBytes))
+					Expect(rem).To(Equal((max - 4) % secp256k1.PointSize))
 				}
 			})
 
 			It("should error if unmarshalling with not enough remaining bytes for the slice len", func() {
 				com := Commitment{}
 				size := com.SizeHint()
-				buf := bytes.NewBuffer(bs[:])
 
 				for i := 0; i < trials; i++ {
 					max := rand.Intn(size)
-					m, err := com.Unmarshal(buf, max)
+					_, m, err := com.Unmarshal(bs[:], max)
 					Expect(err).To(HaveOccurred())
 					Expect(m).To(Equal(max))
 				}
@@ -594,11 +586,9 @@ var _ = Describe("Verifiable secret sharing", func() {
 			It("should error if unmarshalling with not enough remaining bytes for the curve points", func() {
 				for i := 0; i < trials; i++ {
 					k := rand.Intn(maxK) + 1
-					readCap := RandRange(4, curve.PointSizeBytes*k+4-1)
-					dataLen := curve.PointSizeBytes*k + 4
+					readCap := RandRange(4, secp256k1.PointSize*k+4-1)
 					RandomCommitmentBytes(bs[:], k)
-					buf := bytes.NewBuffer(bs[:dataLen])
-					m, err := com.Unmarshal(buf, readCap)
+					_, m, err := com.Unmarshal(bs[:], readCap)
 					Expect(err).To(HaveOccurred())
 					Expect(m).To(Equal(readCap - 4))
 				}
@@ -611,17 +601,15 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 					// Error unmarshalling slice length.
 					max := rand.Intn(4)
-					buf := bytes.NewBuffer(bs[:max])
-					rem, err := com.Unmarshal(buf, com.SizeHint())
+					_, rem, err := com.Unmarshal(bs[:], com.SizeHint())
 					Expect(err).To(HaveOccurred())
 					Expect(rem).To(Equal(com.SizeHint() - max))
 
 					// Error unmarshalling a curve point.
 					max = RandRange(4, com.SizeHint()-1)
 					binary.BigEndian.PutUint32(bs[:4], uint32(k))
-					buf = bytes.NewBuffer(bs[:max])
-					size := k*curve.PointSizeBytes + 4
-					rem, err = com.Unmarshal(buf, size)
+					size := k*secp256k1.PointSize + 4
+					_, rem, err = com.Unmarshal(bs[:], size)
 					Expect(err).To(HaveOccurred())
 					Expect(rem).To(Equal(size - max))
 				}
@@ -634,13 +622,12 @@ var _ = Describe("Verifiable secret sharing", func() {
 					binary.BigEndian.PutUint32(bs[:4], uint32(maxK))
 
 					for j := 0; j < maxK; j++ {
-						randomInvalidCurvePoint(bs[4+j*curve.PointSizeBytes:])
+						randomInvalidCurvePoint(bs[4+j*secp256k1.PointSize:])
 					}
 
-					buf := bytes.NewBuffer(bs[:])
-					m, err := com.Unmarshal(buf, curve.PointSizeBytes*maxK+4)
+					_, m, err := com.Unmarshal(bs[:], secp256k1.PointSize*maxK+4)
 					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal((maxK - 1) * curve.PointSizeBytes))
+					Expect(m).To(Equal((maxK - 1) * secp256k1.PointSize))
 				}
 			})
 		})
@@ -650,14 +637,14 @@ var _ = Describe("Verifiable secret sharing", func() {
 		trials := 1000
 		It("should be the same after marshalling to and from binary", func() {
 			var share1, share2 VerifiableShare
-			var bs [VShareSizeBytes]byte
+			var bs [VShareSize]byte
 
 			for i := 0; i < trials; i++ {
 				share1 = NewVerifiableShare(
-					NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N()),
-					secp256k1.RandomSecp256k1N(),
+					NewShare(secp256k1.RandomFn(), secp256k1.RandomFn()),
+					secp256k1.RandomFn(),
 				)
-				share1.GetBytes(bs[:])
+				share1.PutBytes(bs[:])
 				share2.SetBytes(bs[:])
 				Expect(share1.Eq(&share2)).To(BeTrue())
 			}
@@ -668,83 +655,77 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 			for i := 0; i < trials; i++ {
 				share1 = NewVerifiableShare(
-					NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N()),
-					secp256k1.RandomSecp256k1N(),
+					NewShare(secp256k1.RandomFn(), secp256k1.RandomFn()),
+					secp256k1.RandomFn(),
 				)
 				bs, err := surge.ToBinary(&share1)
 				Expect(err).ToNot(HaveOccurred())
-				err = surge.FromBinary(bs[:], &share2)
+				err = surge.FromBinary(&share2, bs[:])
 				Expect(share1.Eq(&share2)).To(BeTrue())
 			}
 		})
 
 		It("should be able to unmarshal into an empty struct", func() {
-			var bs [VShareSizeBytes]byte
-			buf := bytes.NewBuffer(bs[:])
-			buf.Reset()
+			var bs [VShareSize]byte
 			share1 := NewVerifiableShare(
-				NewShare(secp256k1.RandomSecp256k1N(), secp256k1.RandomSecp256k1N()),
-				secp256k1.RandomSecp256k1N(),
+				NewShare(secp256k1.RandomFn(), secp256k1.RandomFn()),
+				secp256k1.RandomFn(),
 			)
 			share2 := VerifiableShare{}
 
-			_, _ = share1.Marshal(buf, share1.SizeHint())
-			m, err := share2.Unmarshal(buf, share1.SizeHint())
+			_, _, _ = share1.Marshal(bs[:], share1.SizeHint())
+			_, m, err := share2.Unmarshal(bs[:], share1.SizeHint())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(m).To(Equal(0))
 			Expect(share1.Eq(&share2)).To(BeTrue())
 		})
 
 		It("should error if marshalling with remaining bytes less than required for the share", func() {
-			var bs [VShareSizeBytes]byte
+			var bs [VShareSize]byte
 			share := VerifiableShare{}
-			buf := bytes.NewBuffer(bs[:])
 
 			for i := 0; i < trials; i++ {
-				max := rand.Intn(ShareSizeBytes)
-				m, err := share.Marshal(buf, max)
+				max := rand.Intn(ShareSize)
+				_, m, err := share.Marshal(bs[:], max)
 				Expect(err).To(HaveOccurred())
-				Expect(m).To(Equal(max % FnSizeBytes))
+				Expect(m).To(Equal(max % secp256k1.FnSize))
 			}
 		})
 
 		It("should error if marshalling with remaining bytes less than required for the decommitment", func() {
-			var bs [VShareSizeBytes]byte
+			var bs [VShareSize]byte
 			share := VerifiableShare{}
-			buf := bytes.NewBuffer(bs[:])
 
 			for i := 0; i < trials; i++ {
-				max := RandRange(ShareSizeBytes, ShareSizeBytes+FnSizeBytes-1)
-				m, err := share.Marshal(buf, max)
+				max := RandRange(ShareSize, ShareSize+secp256k1.FnSize-1)
+				_, m, err := share.Marshal(bs[:], max)
 				Expect(err).To(HaveOccurred())
-				Expect(m).To(Equal(max - ShareSizeBytes))
+				Expect(m).To(Equal(max - ShareSize))
 			}
 		})
 
 		It("should error if unmarshalling with remaining bytes less than required", func() {
-			var bs [VShareSizeBytes]byte
+			var bs [VShareSize]byte
 			share := VerifiableShare{}
 			size := share.SizeHint()
-			buf := bytes.NewBuffer(bs[:])
 
 			for i := 0; i < trials; i++ {
 				max := rand.Intn(size)
-				m, err := share.Unmarshal(buf, max)
+				_, m, err := share.Unmarshal(bs[:], max)
 				Expect(err).To(HaveOccurred())
 				Expect(m).To(Equal(max))
 			}
 		})
 
 		It("should error if unmarshalling without enough data", func() {
-			var bs [VShareSizeBytes]byte
+			var bs [VShareSize]byte
 			share := VerifiableShare{}
 			size := share.SizeHint()
 			readCap := size
 
 			for i := 0; i < trials; i++ {
 				dataLen := rand.Intn(size)
-				buf := bytes.NewBuffer(bs[:dataLen])
-				n, err := share.Unmarshal(buf, readCap)
+				_, n, err := share.Unmarshal(bs[:], readCap)
 				Expect(err).To(HaveOccurred())
 				Expect(n).To(Equal(readCap - dataLen))
 			}
@@ -758,22 +739,21 @@ var _ = Describe("Verifiable secret sharing", func() {
 	Context("VerifiableShares", func() {
 		trials := 1000
 		const maxN = 20
-		const maxLen = 4 + maxN*VShareSizeBytes
+		const maxLen = 4 + maxN*VShareSize
 		var bs [maxLen]byte
 
 		shares := make(VerifiableShares, maxN)
 		shares1 := make(VerifiableShares, maxN)
 		shares2 := make(VerifiableShares, maxN)
-		buf := bytes.NewBuffer(bs[:])
 
 		RandomiseVerifiableShares := func(shares VerifiableShares) {
 			for i := range shares {
 				shares[i] = NewVerifiableShare(
 					NewShare(
-						secp256k1.RandomSecp256k1N(),
-						secp256k1.RandomSecp256k1N(),
+						secp256k1.RandomFn(),
+						secp256k1.RandomFn(),
 					),
-					secp256k1.RandomSecp256k1N(),
+					secp256k1.RandomFn(),
 				)
 			}
 		}
@@ -792,16 +772,15 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 		It("should be the same after marshalling and unmarshalling", func() {
 			for i := 0; i < trials; i++ {
-				buf.Reset()
 				n := RandRange(0, maxN)
 				shares1 = shares1[:n]
 				RandomiseVerifiableShares(shares1)
 
-				m, err := shares1.Marshal(buf, 4+n*VShareSizeBytes)
+				_, m, err := shares1.Marshal(bs[:], 4+n*VShareSize)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(m).To(Equal(0))
 
-				m, err = shares2.Unmarshal(buf, 4+n*VShareSizeBytes)
+				_, m, err = shares2.Unmarshal(bs[:], 4+n*VShareSize)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(m).To(Equal(0))
 
@@ -817,19 +796,18 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 				bs, err := surge.ToBinary(&shares1)
 				Expect(err).ToNot(HaveOccurred())
-				err = surge.FromBinary(bs[:], &shares2)
+				err = surge.FromBinary(&shares2, bs[:])
 				Expect(VerifiableSharesAreEq(shares1, shares2)).To(BeTrue())
 			}
 		})
 
 		It("should be able to unmarshal into an empty struct", func() {
-			buf.Reset()
 			shares1 = shares1[:maxN]
 			RandomiseVerifiableShares(shares1)
 			shares2 := VerifiableShares{}
 
-			_, _ = shares1.Marshal(buf, shares1.SizeHint())
-			m, err := shares2.Unmarshal(buf, shares1.SizeHint())
+			_, _, _ = shares1.Marshal(bs[:], shares1.SizeHint())
+			_, m, err := shares2.Unmarshal(bs[:], shares1.SizeHint())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(m).To(Equal(0))
 			Expect(VerifiableSharesAreEq(shares1, shares2)).To(BeTrue())
@@ -839,7 +817,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 			It("should return an error when the max is too small for the slice length", func() {
 				for i := 0; i < trials; i++ {
 					max := rand.Intn(4)
-					m, err := shares.Marshal(buf, max)
+					_, m, err := shares.Marshal(bs[:], max)
 					Expect(err).To(HaveOccurred())
 					Expect(m).To(Equal(max))
 				}
@@ -848,8 +826,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 			It("should return an error when the writer is too small for the slice length", func() {
 				for i := 0; i < trials; i++ {
 					max := rand.Intn(4)
-					w := NewBoundedWriter(max)
-					m, err := shares.Marshal(&w, 4)
+					_, m, err := shares.Marshal(bs[:], 4)
 					Expect(err).To(HaveOccurred())
 					Expect(m).To(Equal(4 - max))
 				}
@@ -857,15 +834,14 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 			It("should return an error when the max is too small for all of the shares", func() {
 				for i := 0; i < trials; i++ {
-					buf.Reset()
 					n := RandRange(1, maxN)
 					shares = shares[:n]
 					RandomiseVerifiableShares(shares)
-					max := RandRange(4, 4+n*VShareSizeBytes-1)
+					max := RandRange(4, 4+n*VShareSize-1)
 
-					m, err := shares.Marshal(buf, max)
+					_, m, err := shares.Marshal(bs[:], max)
 					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal((max - 4) % FnSizeBytes))
+					Expect(m).To(Equal((max - 4) % secp256k1.FnSize))
 				}
 			})
 		})
@@ -873,10 +849,9 @@ var _ = Describe("Verifiable secret sharing", func() {
 		Context("Unmarshalling errors", func() {
 			It("should return an error when the max is too small for the slice length", func() {
 				for i := 0; i < trials; i++ {
-					buf.Reset()
 					max := rand.Intn(4)
 
-					m, err := shares2.Unmarshal(buf, max)
+					_, m, err := shares2.Unmarshal(bs[:], max)
 					Expect(err).To(HaveOccurred())
 					Expect(m).To(Equal(max))
 				}
@@ -884,11 +859,9 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 			It("should return an error when the reader is too small for the slice length", func() {
 				for i := 0; i < trials; i++ {
-					buf.Reset()
 					max := rand.Intn(4)
-					buf := bytes.NewBuffer(bs[:max])
 
-					m, err := shares2.Unmarshal(buf, 4)
+					_, m, err := shares2.Unmarshal(bs[:], 4)
 					Expect(err).To(HaveOccurred())
 					Expect(m).To(Equal(4 - max))
 				}
@@ -899,12 +872,10 @@ var _ = Describe("Verifiable secret sharing", func() {
 				RandomiseVerifiableShares(shares1)
 
 				for i := 0; i < trials; i++ {
-					buf.Reset()
-					shares1.Marshal(buf, maxLen)
 					n := RandRange(1, maxN)
-					max := RandRange(4, 4+n*VShareSizeBytes-1)
+					max := RandRange(4, 4+n*VShareSize-1)
 
-					m, err := shares2.Unmarshal(buf, max)
+					_, m, err := shares2.Unmarshal(bs[:], max)
 					Expect(err).To(HaveOccurred())
 					Expect(m).To(Equal(max - 4))
 				}
@@ -915,10 +886,9 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 				for i := 0; i < trials; i++ {
 					n := RandRange(1, maxN)
-					max := RandRange(4, 4+n*VShareSizeBytes-1)
-					buf := bytes.NewBuffer(bs[:max])
+					max := RandRange(4, 4+n*VShareSize-1)
 
-					m, err := shares2.Unmarshal(buf, maxLen)
+					_, m, err := shares2.Unmarshal(bs[:], maxLen)
 					Expect(err).To(HaveOccurred())
 					Expect(m).To(Equal(maxLen - max))
 				}
@@ -932,39 +902,36 @@ var _ = Describe("Verifiable secret sharing", func() {
 		var checker VSSChecker
 
 		It("should marshall and unmarshall with surge successfully", func() {
-			var h curve.Point
+			var h secp256k1.Point
 
 			for i := 0; i < trials; i++ {
-				h = curve.Random()
+				h = secp256k1.RandomPoint()
 				checker = NewVSSChecker(h)
 				bs, err := surge.ToBinary(&checker)
 				Expect(err).ToNot(HaveOccurred())
-				err = surge.FromBinary(bs[:], &checker)
+				err = surge.FromBinary(&checker, bs[:])
 				Expect(err).ToNot(HaveOccurred())
 			}
 		})
 
 		It("should be able to unmarshal into an empty struct", func() {
-			var bs [curve.PointSizeBytes]byte
-			buf := bytes.NewBuffer(bs[:])
-			buf.Reset()
+			var bs [secp256k1.PointSize]byte
 			checker1 := NewVSSChecker(h)
 			checker2 := VSSChecker{}
 
-			_, _ = checker1.Marshal(buf, checker1.SizeHint())
-			m, err := checker2.Unmarshal(buf, checker1.SizeHint())
+			_, _, _ = checker1.Marshal(bs[:], checker1.SizeHint())
+			_, m, err := checker2.Unmarshal(bs[:], checker1.SizeHint())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(m).To(Equal(0))
 		})
 
 		Specify("unmarhsalling should return an error if the data isn't valid", func() {
-			var bs [curve.PointSizeBytes]byte
+			var bs [secp256k1.PointSize]byte
 
 			for i := 0; i < trials; i++ {
 				randomInvalidCurvePoint(bs[:])
 
-				buf := bytes.NewBuffer(bs[:])
-				m, err := checker.Unmarshal(buf, curve.PointSizeBytes)
+				_, m, err := checker.Unmarshal(bs[:], secp256k1.PointSize)
 				Expect(err).To(HaveOccurred())
 				Expect(m).To(Equal(0))
 			}
@@ -976,8 +943,8 @@ var _ = Describe("Verifiable secret sharing", func() {
 		const n int = 20
 
 		var k int
-		var secret secp256k1.Secp256k1N
-		var bs [4 + n*FnSizeBytes + curve.PointSizeBytes]byte
+		var secret secp256k1.Fn
+		var bs [4 + n*secp256k1.FnSize + secp256k1.PointSize]byte
 
 		indices := RandomIndices(n)
 		vshares := make(VerifiableShares, n)
@@ -989,12 +956,12 @@ var _ = Describe("Verifiable secret sharing", func() {
 			for i := 0; i < trials; i++ {
 				// Create a random sharing.
 				k = RandRange(1, n)
-				secret = secp256k1.RandomSecp256k1N()
+				secret = secp256k1.RandomFn()
 
 				// Marhsal and unmarshal the vssharer.
 				bs, err := surge.ToBinary(&vssharer)
 				Expect(err).ToNot(HaveOccurred())
-				err = surge.FromBinary(bs[:], &vssharer)
+				err = surge.FromBinary(&vssharer, bs[:])
 				Expect(err).ToNot(HaveOccurred())
 
 				err = vssharer.Share(&vshares, &c, secret, k)
@@ -1008,13 +975,11 @@ var _ = Describe("Verifiable secret sharing", func() {
 		})
 
 		It("should be able to unmarshal into an empty struct", func() {
-			buf := bytes.NewBuffer(bs[:])
-			buf.Reset()
 			vssharer1 := NewVSSharer(indices, h)
 			vssharer2 := VSSharer{}
 
-			_, _ = vssharer1.Marshal(buf, vssharer1.SizeHint())
-			m, err := vssharer2.Unmarshal(buf, vssharer1.SizeHint())
+			_, _, _ = vssharer1.Marshal(bs[:], vssharer1.SizeHint())
+			_, m, err := vssharer2.Unmarshal(bs[:], vssharer1.SizeHint())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(m).To(Equal(0))
 		})
@@ -1030,15 +995,13 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 					// Can't write slice length.
 					max := rand.Intn(4)
-					w := NewBoundedWriter(max)
-					rem, err := vssharer.Marshal(&w, vssharer.SizeHint())
+					_, rem, err := vssharer.Marshal(bs[:], vssharer.SizeHint())
 					Expect(err).To(HaveOccurred())
 					Expect(rem).To(Equal(vssharer.SizeHint() - max))
 
 					// Can't write all indices.
 					max = RandRange(4, vssharer.SizeHint()-h.SizeHint()-1)
-					w = NewBoundedWriter(max)
-					rem, err = vssharer.Marshal(&w, vssharer.SizeHint())
+					_, rem, err = vssharer.Marshal(bs[:], vssharer.SizeHint())
 					Expect(err).To(HaveOccurred())
 					Expect(rem).To(Equal(vssharer.SizeHint() - max))
 
@@ -1046,8 +1009,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 					// Error marshalling h.
 					//
 					max = RandRange(vssharer.SizeHint()-h.SizeHint(), vssharer.SizeHint()-1)
-					w = NewBoundedWriter(max)
-					rem, err = vssharer.Marshal(&w, vssharer.SizeHint())
+					_, rem, err = vssharer.Marshal(bs[:], vssharer.SizeHint())
 					Expect(err).To(HaveOccurred())
 					Expect(rem).To(Equal(vssharer.SizeHint() - max))
 				}
@@ -1055,7 +1017,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 			It("should fail if the max is not big enough", func() {
 				vssharer = NewVSSharer(indices, h)
-				buf := bytes.NewBuffer(bs[:])
 
 				for i := 0; i < trials; i++ {
 					//
@@ -1064,21 +1025,21 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 					// Can't write slice length.
 					max := rand.Intn(4)
-					rem, err := vssharer.Marshal(buf, max)
+					_, rem, err := vssharer.Marshal(bs[:], max)
 					Expect(err).To(HaveOccurred())
 					Expect(rem).To(Equal(max))
 
 					// Can't write all indices.
 					max = RandRange(4, vssharer.SizeHint()-h.SizeHint()-1)
-					rem, err = vssharer.Marshal(buf, max)
+					_, rem, err = vssharer.Marshal(bs[:], max)
 					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal((max - 4) % FnSizeBytes))
+					Expect(rem).To(Equal((max - 4) % secp256k1.FnSize))
 
 					//
 					// Error marshalling h.
 					//
 					max = RandRange(vssharer.SizeHint()-h.SizeHint(), vssharer.SizeHint()-1)
-					rem, err = vssharer.Marshal(buf, max)
+					_, rem, err = vssharer.Marshal(bs[:], max)
 					Expect(err).To(HaveOccurred())
 					Expect(rem).To(Equal(max - vssharer.SizeHint() + h.SizeHint()))
 				}
@@ -1092,11 +1053,10 @@ var _ = Describe("Verifiable secret sharing", func() {
 		Context("Unmarshalling errors", func() {
 			It("should error if unmarshalling with not enough remaining bytes for the slice len", func() {
 				vssharer = VSSharer{}
-				buf := bytes.NewBuffer(bs[:])
 
 				for i := 0; i < trials; i++ {
 					max := rand.Intn(4)
-					m, err := vssharer.Unmarshal(buf, max)
+					_, m, err := vssharer.Unmarshal(bs[:], max)
 					Expect(err).To(HaveOccurred())
 					Expect(m).To(Equal(max))
 				}
@@ -1105,11 +1065,9 @@ var _ = Describe("Verifiable secret sharing", func() {
 			It("should error if unmarshalling with not enough remaining bytes for the indices", func() {
 				for i := 0; i < trials; i++ {
 					k := rand.Intn(n) + 1
-					readCap := RandRange(4, FnSizeBytes*k+4-1)
-					dataLen := FnSizeBytes*k + 4
-					RandomSliceBytes(bs[:], k, FnSizeBytes, FillRandSecp)
-					buf := bytes.NewBuffer(bs[:dataLen])
-					m, err := vssharer.Unmarshal(buf, readCap)
+					readCap := RandRange(4, secp256k1.FnSize*k+4-1)
+					RandomSliceBytes(bs[:], k, secp256k1.FnSize, FillRandSecp)
+					_, m, err := vssharer.Unmarshal(bs[:], readCap)
 					Expect(err).To(HaveOccurred())
 					Expect(m).To(Equal(readCap - 4))
 				}
@@ -1117,13 +1075,11 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 			It("should error if unmarshalling with not enough remaining bytes for h", func() {
 				for i := 0; i < trials; i++ {
-					readCap := RandRange(4+FnSizeBytes*n, 4+FnSizeBytes*n+h.SizeHint()-1)
-					dataLen := 4 + FnSizeBytes*n + h.SizeHint()
-					RandomSliceBytes(bs[:], n, FnSizeBytes, FillRandSecp)
-					buf := bytes.NewBuffer(bs[:dataLen])
-					m, err := vssharer.Unmarshal(buf, readCap)
+					readCap := RandRange(4+secp256k1.FnSize*n, 4+secp256k1.FnSize*n+h.SizeHint()-1)
+					RandomSliceBytes(bs[:], n, secp256k1.FnSize, FillRandSecp)
+					_, m, err := vssharer.Unmarshal(bs[:], readCap)
 					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal(readCap - 4 - FnSizeBytes*n))
+					Expect(m).To(Equal(readCap - 4 - secp256k1.FnSize*n))
 				}
 			})
 
@@ -1135,17 +1091,15 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 					// Error unmarshalling slice length.
 					max := rand.Intn(4)
-					buf := bytes.NewBuffer(bs[:max])
-					rem, err := vssharer.Unmarshal(buf, vssharer.SizeHint())
+					_, rem, err := vssharer.Unmarshal(bs[:], vssharer.SizeHint())
 					Expect(err).To(HaveOccurred())
 					Expect(rem).To(Equal(vssharer.SizeHint() - max))
 
 					// Error unmarshalling an index.
 					max = RandRange(4, vssharer.SizeHint()-h.SizeHint()-1)
 					binary.BigEndian.PutUint32(bs[:4], uint32(k))
-					buf = bytes.NewBuffer(bs[:max])
-					size := k*FnSizeBytes + 4
-					rem, err = vssharer.Unmarshal(buf, size)
+					size := k*secp256k1.FnSize + 4
+					_, rem, err = vssharer.Unmarshal(bs[:], size)
 					Expect(err).To(HaveOccurred())
 					Expect(rem).To(Equal(size - max))
 				}
@@ -1154,9 +1108,9 @@ var _ = Describe("Verifiable secret sharing", func() {
 	})
 
 	Context("Constants", func() {
-		Specify("VShareSizeBytes should have the correct value", func() {
+		Specify("VShareSize should have the correct value", func() {
 			vshare := VerifiableShare{}
-			Expect(VShareSizeBytes).To(Equal(vshare.SizeHint()))
+			Expect(VShareSize).To(Equal(vshare.SizeHint()))
 		})
 	})
 })
@@ -1164,13 +1118,13 @@ var _ = Describe("Verifiable secret sharing", func() {
 func BenchmarkVSShare(b *testing.B) {
 	n := 100
 	k := 33
-	h := curve.Random()
+	h := secp256k1.RandomPoint()
 
 	indices := RandomIndices(n)
 	vshares := make(VerifiableShares, n)
 	c := NewCommitmentWithCapacity(n)
 	vssharer := NewVSSharer(indices, h)
-	secret := secp256k1.RandomSecp256k1N()
+	secret := secp256k1.RandomFn()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1181,14 +1135,14 @@ func BenchmarkVSShare(b *testing.B) {
 func BenchmarkVSSVerify(b *testing.B) {
 	n := 100
 	k := 33
-	h := curve.Random()
+	h := secp256k1.RandomPoint()
 
 	indices := RandomIndices(n)
 	vshares := make(VerifiableShares, n)
 	c := NewCommitmentWithCapacity(n)
 	vssharer := NewVSSharer(indices, h)
 	checker := NewVSSChecker(h)
-	secret := secp256k1.RandomSecp256k1N()
+	secret := secp256k1.RandomFn()
 	_ = vssharer.Share(&vshares, &c, secret, k)
 	ind := rand.Intn(100)
 	share := vshares[ind]

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"math/rand"
 
-	"github.com/renproject/secp256k1-go"
+	"github.com/renproject/secp256k1"
 )
 
 // Max returns the maximum of the two given ints.
@@ -57,6 +57,6 @@ func RandomSliceBytes(dst []byte, n, b int, fill func([]byte)) {
 // FillRandSecp fills the destination byte slice with data corresponding to a
 // random element of the secp256k1 field.
 func FillRandSecp(dst []byte) {
-	x := secp256k1.RandomSecp256k1N()
-	x.GetB32(dst[:32])
+	x := secp256k1.RandomFn()
+	x.PutB32(dst[:32])
 }

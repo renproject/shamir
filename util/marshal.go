@@ -14,7 +14,7 @@ import (
 // large.
 func UnmarshalSliceLen32(dst *uint32, elemSize int, r io.Reader, m int) (int, error) {
 	if m < 4 {
-		return m, surge.ErrMaxBytesExceeded
+		return m, surge.ErrUnexpectedEndOfBuffer
 	}
 
 	var bs [4]byte
@@ -36,7 +36,7 @@ func UnmarshalSliceLen32(dst *uint32, elemSize int, r io.Reader, m int) (int, er
 	// is guaranteed to be positive: we check at the start of the function that
 	// m >= 4, and then only subtract n which satisfies n <= 4.
 	if uint32(m) < l*uint32(elemSize) {
-		return m, surge.ErrMaxBytesExceeded
+		return m, surge.ErrUnexpectedEndOfBuffer
 	}
 
 	*dst = l
