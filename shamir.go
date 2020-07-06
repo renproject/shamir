@@ -38,15 +38,9 @@ func (shares Shares) Marshal(buf []byte, rem int) ([]byte, int, error) {
 // Unmarshal implements the surge.Unmarshaler interface.
 func (shares *Shares) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 	var l uint32
-	buf, rem, err := surge.UnmarshalU32(&l, buf, rem)
+	buf, rem, err := unmarshalSliceLen32(&l, ShareSize, buf, rem)
 	if err != nil {
 		return buf, rem, err
-	}
-
-	// TODO: Consider overflow.
-	c := l * uint32(ShareSize)
-	if uint32(len(buf)) < c || uint32(rem) < c {
-		return buf, rem, surge.ErrUnexpectedEndOfBuffer
 	}
 
 	if *shares == nil {
@@ -190,51 +184,6 @@ func (sharer *Sharer) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 	}
 
 	*sharer = NewSharer(indices)
-
-	return buf, rem, nil
-}
-
-func marshalIndices(indices []secp256k1.Fn, buf []byte, rem int) ([]byte, int, error) {
-	buf, rem, err := surge.MarshalU32(uint32(len(indices)), buf, rem)
-	if err != nil {
-		return buf, rem, err
-	}
-
-	for i := range indices {
-		buf, rem, err = indices[i].Marshal(buf, rem)
-		if err != nil {
-			return buf, rem, err
-		}
-	}
-
-	return buf, rem, nil
-}
-
-func unmarshalIndices(dst *[]secp256k1.Fn, buf []byte, rem int) ([]byte, int, error) {
-	var l uint32
-
-	buf, rem, err := surge.UnmarshalU32(&l, buf, rem)
-	if err != nil {
-		return buf, rem, err
-	}
-
-	c := l * uint32(secp256k1.FnSize)
-	if uint32(len(buf)) < c || uint32(rem) < c {
-		return buf, rem, surge.ErrUnexpectedEndOfBuffer
-	}
-
-	if *dst == nil {
-		*dst = make([]secp256k1.Fn, 0)
-	}
-
-	*dst = (*dst)[:0]
-	for i := uint32(0); i < l; i++ {
-		*dst = append(*dst, secp256k1.Fn{})
-		buf, rem, err = (*dst)[i].Unmarshal(buf, rem)
-		if err != nil {
-			return buf, rem, err
-		}
-	}
 
 	return buf, rem, nil
 }
