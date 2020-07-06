@@ -5,6 +5,7 @@ import (
 	"github.com/renproject/surge"
 )
 
+// Panics: This function will panic if the elemSize is 0.
 func unmarshalSliceLen32(dst *uint32, elemSize int, buf []byte, rem int) ([]byte, int, error) {
 	var l uint32
 	buf, rem, err := surge.UnmarshalU32(&l, buf, rem)

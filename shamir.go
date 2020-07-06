@@ -89,8 +89,7 @@ func (s Share) Marshal(buf []byte, rem int) ([]byte, int, error) {
 		return buf, rem, err
 	}
 
-	buf, rem, err = s.value.Marshal(buf, rem)
-	return buf, rem, err
+	return s.value.Marshal(buf, rem)
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.
@@ -124,7 +123,7 @@ func (s *Share) IndexEq(other *secp256k1.Fn) bool {
 // unchanged.
 //
 // Panics: Addition only makes sense when the two input shares have the same
-// index. If they do not, this functino wil panic.
+// index. If they do not, this function wil panic.
 func (s *Share) Add(a, b *Share) {
 	if !a.index.Eq(&b.index) {
 		panic(fmt.Sprintf(
