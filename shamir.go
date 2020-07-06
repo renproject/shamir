@@ -20,10 +20,6 @@ func (shares Shares) SizeHint() int { return surge.SizeHintU32 + ShareSize*len(s
 
 // Marshal implements the surge.Marshaler interface.
 func (shares Shares) Marshal(buf []byte, rem int) ([]byte, int, error) {
-	if len(buf) < shares.SizeHint() || rem < shares.SizeHint() {
-		return buf, rem, surge.ErrUnexpectedEndOfBuffer
-	}
-
 	buf, rem, err := surge.MarshalU32(uint32(len(shares)), buf, rem)
 	if err != nil {
 		return buf, rem, err
@@ -221,11 +217,6 @@ func (sharer *Sharer) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 }
 
 func marshalIndices(indices []secp256k1.Fn, buf []byte, rem int) ([]byte, int, error) {
-	c := surge.SizeHintU32 + len(indices)*secp256k1.FnSize
-	if len(buf) < c || rem < c {
-		return buf, rem, surge.ErrUnexpectedEndOfBuffer
-	}
-
 	buf, rem, err := surge.MarshalU32(uint32(len(indices)), buf, rem)
 	if err != nil {
 		return buf, rem, err
