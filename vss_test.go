@@ -3,11 +3,13 @@ package shamir_test
 import (
 	"encoding/binary"
 	"math/rand"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/renproject/secp256k1"
 	"github.com/renproject/surge"
+	"github.com/renproject/surge/surgeutil"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -53,15 +55,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 	// log_g(h), that is, no one should know a number x such that h = g^x. For
 	// testing this obivously does not matter.
 	h := secp256k1.RandomPoint()
-
-	randomInvalidCurvePoint := func(bs []byte) {
-		// The data is just that of a curve point. The probability that a
-		// random 64 bytes will represent a point on the curve is negligible.
-		rand.Read(bs[:64])
-
-		// Make sure that it does not represent the point at infinity.
-		bs[64] = 0
-	}
 
 	Context("Correctness (1)", func() {
 		trials := 20
@@ -403,12 +396,11 @@ var _ = Describe("Verifiable secret sharing", func() {
 		const maxK int = 10
 
 		var trials int
-		var com, com1, com2 Commitment
+		var com1, com2 Commitment
 		var bs [secp256k1.PointSize*maxK + 4]byte
 
 		BeforeEach(func() {
 			trials = 100
-			com = NewCommitmentWithCapacity(maxK)
 			com1 = NewCommitmentWithCapacity(maxK)
 			com2 = NewCommitmentWithCapacity(maxK)
 		})
@@ -510,125 +502,48 @@ var _ = Describe("Verifiable secret sharing", func() {
 				}
 			})
 
-			Specify("marshalling and unmarshalling a commitment using surge should leave it unchanged", func() {
-				for i := 0; i < trials; i++ {
-					k := rand.Intn(maxK) + 1
-					RandomiseCommitment(&com1, k)
-					bs, err := surge.ToBinary(&com1)
-					Expect(err).ToNot(HaveOccurred())
-					surge.FromBinary(&com2, bs)
-					Expect(com1.Eq(&com2)).To(BeTrue())
-				}
-			})
+			Context("surge", func() {
+				t := reflect.TypeOf(Commitment{})
 
-			It("should be able to unmarshal into an empty struct", func() {
-				RandomiseCommitment(&com1, maxK)
-				com2 := Commitment{}
-
-				_, _, _ = com1.Marshal(bs[:], com1.SizeHint())
-				_, m, err := com2.Unmarshal(bs[:], com1.SizeHint())
-				Expect(err).ToNot(HaveOccurred())
-				Expect(m).To(Equal(0))
-				Expect(com1.Eq(&com2)).To(BeTrue())
-			})
-
-			It("should error if marshalling fails", func() {
-				k := rand.Intn(maxK) + 1
-				RandomiseCommitment(&com, k)
-
-				for i := 0; i < trials; i++ {
-					//
-					// Error marshalling slice length.
-					//
-
-					// Writer not big enough.
-					max := rand.Intn(4)
-					_, rem, err := com.Marshal(bs[:], com.SizeHint())
-					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal(com.SizeHint() - max))
-
-					// Max not big enough.
-					max = rand.Intn(4)
-					_, rem, err = com.Marshal(bs[:], max)
-					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal(max))
-
-					//
-					// Error marshalling a curve point.
-					//
-
-					// Writer not big enough.
-					max = RandRange(4, com.SizeHint()-1)
-					_, rem, err = com.Marshal(bs[:], com.SizeHint())
-					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal(com.SizeHint() - max))
-
-					// Max not big enough.
-					max = RandRange(4, com.SizeHint()-1)
-					_, rem, err = com.Marshal(bs[:], max)
-					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal((max - 4) % secp256k1.PointSize))
-				}
-			})
-
-			It("should error if unmarshalling with not enough remaining bytes for the slice len", func() {
-				com := Commitment{}
-				size := com.SizeHint()
-
-				for i := 0; i < trials; i++ {
-					max := rand.Intn(size)
-					_, m, err := com.Unmarshal(bs[:], max)
-					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal(max))
-				}
-			})
-
-			It("should error if unmarshalling with not enough remaining bytes for the curve points", func() {
-				for i := 0; i < trials; i++ {
-					k := rand.Intn(maxK) + 1
-					readCap := RandRange(4, secp256k1.PointSize*k+4-1)
-					RandomCommitmentBytes(bs[:], k)
-					_, m, err := com.Unmarshal(bs[:], readCap)
-					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal(readCap - 4))
-				}
-			})
-
-			It("should error if unmarshalling without enough data", func() {
-				for i := 0; i < trials; i++ {
-					k := rand.Intn(maxK) + 1
-					RandomiseCommitment(&com, k)
-
-					// Error unmarshalling slice length.
-					max := rand.Intn(4)
-					_, rem, err := com.Unmarshal(bs[:], com.SizeHint())
-					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal(com.SizeHint() - max))
-
-					// Error unmarshalling a curve point.
-					max = RandRange(4, com.SizeHint()-1)
-					binary.BigEndian.PutUint32(bs[:4], uint32(k))
-					size := k*secp256k1.PointSize + 4
-					_, rem, err = com.Unmarshal(bs[:], size)
-					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal(size - max))
-				}
-			})
-
-			Specify("unmarhsalling should return an error if the data doesn't represent a curve point", func() {
-				for i := 0; i < trials; i++ {
-					// Make sure that the slice length data is valid so that it
-					// can proceed to unmarshalling the curve points.
-					binary.BigEndian.PutUint32(bs[:4], uint32(maxK))
-
-					for j := 0; j < maxK; j++ {
-						randomInvalidCurvePoint(bs[4+j*secp256k1.PointSize:])
+				It("should be the same after marshalling and unmarshalling", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
 					}
+				})
 
-					_, m, err := com.Unmarshal(bs[:], secp256k1.PointSize*maxK+4)
-					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal((maxK - 1) * secp256k1.PointSize))
-				}
+				It("should not panic when fuzzing", func() {
+					for i := 0; i < trials; i++ {
+						Expect(func() { surgeutil.Fuzz(t) }).ToNot(Panic())
+					}
+				})
+
+				Context("marshalling", func() {
+					It("should return an error when the buffer is too small", func() {
+						for i := 0; i < trials; i++ {
+							Expect(surgeutil.MarshalBufTooSmall(t)).To(Succeed())
+						}
+					})
+
+					It("should return an error when the memory quota is too small", func() {
+						for i := 0; i < trials; i++ {
+							Expect(surgeutil.MarshalRemTooSmall(t)).To(Succeed())
+						}
+					})
+				})
+
+				Context("unmarshalling", func() {
+					It("should return an error when the buffer is too small", func() {
+						for i := 0; i < trials; i++ {
+							Expect(surgeutil.UnmarshalBufTooSmall(t)).To(Succeed())
+						}
+					})
+
+					It("should return an error when the memory quota is too small", func() {
+						for i := 0; i < trials; i++ {
+							Expect(surgeutil.UnmarshalRemTooSmall(t)).To(Succeed())
+						}
+					})
+				})
 			})
 		})
 	})
@@ -650,19 +565,48 @@ var _ = Describe("Verifiable secret sharing", func() {
 			}
 		})
 
-		It("should be the same after marshalling and unmarshalling with surge", func() {
-			var share1, share2 VerifiableShare
+		Context("surge", func() {
+			t := reflect.TypeOf(VerifiableShare{})
 
-			for i := 0; i < trials; i++ {
-				share1 = NewVerifiableShare(
-					NewShare(secp256k1.RandomFn(), secp256k1.RandomFn()),
-					secp256k1.RandomFn(),
-				)
-				bs, err := surge.ToBinary(&share1)
-				Expect(err).ToNot(HaveOccurred())
-				err = surge.FromBinary(&share2, bs[:])
-				Expect(share1.Eq(&share2)).To(BeTrue())
-			}
+			It("should be the same after marshalling and unmarshalling", func() {
+				for i := 0; i < trials; i++ {
+					Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
+				}
+			})
+
+			It("should not panic when fuzzing", func() {
+				for i := 0; i < trials; i++ {
+					Expect(func() { surgeutil.Fuzz(t) }).ToNot(Panic())
+				}
+			})
+
+			Context("marshalling", func() {
+				It("should return an error when the buffer is too small", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.MarshalBufTooSmall(t)).To(Succeed())
+					}
+				})
+
+				It("should return an error when the memory quota is too small", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.MarshalRemTooSmall(t)).To(Succeed())
+					}
+				})
+			})
+
+			Context("unmarshalling", func() {
+				It("should return an error when the buffer is too small", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.UnmarshalBufTooSmall(t)).To(Succeed())
+					}
+				})
+
+				It("should return an error when the memory quota is too small", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.UnmarshalRemTooSmall(t)).To(Succeed())
+					}
+				})
+			})
 		})
 
 		It("should be able to unmarshal into an empty struct", func() {
@@ -679,57 +623,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 			Expect(m).To(Equal(0))
 			Expect(share1.Eq(&share2)).To(BeTrue())
 		})
-
-		It("should error if marshalling with remaining bytes less than required for the share", func() {
-			var bs [VShareSize]byte
-			share := VerifiableShare{}
-
-			for i := 0; i < trials; i++ {
-				max := rand.Intn(ShareSize)
-				_, m, err := share.Marshal(bs[:], max)
-				Expect(err).To(HaveOccurred())
-				Expect(m).To(Equal(max % secp256k1.FnSize))
-			}
-		})
-
-		It("should error if marshalling with remaining bytes less than required for the decommitment", func() {
-			var bs [VShareSize]byte
-			share := VerifiableShare{}
-
-			for i := 0; i < trials; i++ {
-				max := RandRange(ShareSize, ShareSize+secp256k1.FnSize-1)
-				_, m, err := share.Marshal(bs[:], max)
-				Expect(err).To(HaveOccurred())
-				Expect(m).To(Equal(max - ShareSize))
-			}
-		})
-
-		It("should error if unmarshalling with remaining bytes less than required", func() {
-			var bs [VShareSize]byte
-			share := VerifiableShare{}
-			size := share.SizeHint()
-
-			for i := 0; i < trials; i++ {
-				max := rand.Intn(size)
-				_, m, err := share.Unmarshal(bs[:], max)
-				Expect(err).To(HaveOccurred())
-				Expect(m).To(Equal(max))
-			}
-		})
-
-		It("should error if unmarshalling without enough data", func() {
-			var bs [VShareSize]byte
-			share := VerifiableShare{}
-			size := share.SizeHint()
-			readCap := size
-
-			for i := 0; i < trials; i++ {
-				dataLen := rand.Intn(size)
-				_, n, err := share.Unmarshal(bs[:], readCap)
-				Expect(err).To(HaveOccurred())
-				Expect(n).To(Equal(readCap - dataLen))
-			}
-		})
 	})
 
 	//
@@ -742,7 +635,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 		const maxLen = 4 + maxN*VShareSize
 		var bs [maxLen]byte
 
-		shares := make(VerifiableShares, maxN)
 		shares1 := make(VerifiableShares, maxN)
 		shares2 := make(VerifiableShares, maxN)
 
@@ -788,19 +680,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 			}
 		})
 
-		It("should be the same after marshalling with surge", func() {
-			for i := 0; i < trials; i++ {
-				n := RandRange(0, maxN)
-				shares1 = shares1[:n]
-				RandomiseVerifiableShares(shares1)
-
-				bs, err := surge.ToBinary(&shares1)
-				Expect(err).ToNot(HaveOccurred())
-				err = surge.FromBinary(&shares2, bs[:])
-				Expect(VerifiableSharesAreEq(shares1, shares2)).To(BeTrue())
-			}
-		})
-
 		It("should be able to unmarshal into an empty struct", func() {
 			shares1 = shares1[:maxN]
 			RandomiseVerifiableShares(shares1)
@@ -813,85 +692,47 @@ var _ = Describe("Verifiable secret sharing", func() {
 			Expect(VerifiableSharesAreEq(shares1, shares2)).To(BeTrue())
 		})
 
-		Context("Marshalling errors", func() {
-			It("should return an error when the max is too small for the slice length", func() {
+		Context("surge", func() {
+			t := reflect.TypeOf(VerifiableShares{})
+
+			It("should be the same after marshalling and unmarshalling", func() {
 				for i := 0; i < trials; i++ {
-					max := rand.Intn(4)
-					_, m, err := shares.Marshal(bs[:], max)
-					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal(max))
+					Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
 				}
 			})
 
-			It("should return an error when the writer is too small for the slice length", func() {
+			It("should not panic when fuzzing", func() {
 				for i := 0; i < trials; i++ {
-					max := rand.Intn(4)
-					_, m, err := shares.Marshal(bs[:], 4)
-					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal(4 - max))
+					Expect(func() { surgeutil.Fuzz(t) }).ToNot(Panic())
 				}
 			})
 
-			It("should return an error when the max is too small for all of the shares", func() {
-				for i := 0; i < trials; i++ {
-					n := RandRange(1, maxN)
-					shares = shares[:n]
-					RandomiseVerifiableShares(shares)
-					max := RandRange(4, 4+n*VShareSize-1)
+			Context("marshalling", func() {
+				It("should return an error when the buffer is too small", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.MarshalBufTooSmall(t)).To(Succeed())
+					}
+				})
 
-					_, m, err := shares.Marshal(bs[:], max)
-					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal((max - 4) % secp256k1.FnSize))
-				}
-			})
-		})
-
-		Context("Unmarshalling errors", func() {
-			It("should return an error when the max is too small for the slice length", func() {
-				for i := 0; i < trials; i++ {
-					max := rand.Intn(4)
-
-					_, m, err := shares2.Unmarshal(bs[:], max)
-					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal(max))
-				}
+				It("should return an error when the memory quota is too small", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.MarshalRemTooSmall(t)).To(Succeed())
+					}
+				})
 			})
 
-			It("should return an error when the reader is too small for the slice length", func() {
-				for i := 0; i < trials; i++ {
-					max := rand.Intn(4)
+			Context("unmarshalling", func() {
+				It("should return an error when the buffer is too small", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.UnmarshalBufTooSmall(t)).To(Succeed())
+					}
+				})
 
-					_, m, err := shares2.Unmarshal(bs[:], 4)
-					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal(4 - max))
-				}
-			})
-
-			It("should return an error when the max is too small for all of the shares", func() {
-				shares1 = shares1[:maxN]
-				RandomiseVerifiableShares(shares1)
-
-				for i := 0; i < trials; i++ {
-					n := RandRange(1, maxN)
-					max := RandRange(4, 4+n*VShareSize-1)
-
-					_, m, err := shares2.Unmarshal(bs[:], max)
-					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal(max - 4))
-				}
-			})
-
-			It("should return an error when the reader is too small for all of the shares", func() {
-				binary.BigEndian.PutUint32(bs[:4], maxN)
-
-				for i := 0; i < trials; i++ {
-					n := RandRange(1, maxN)
-					max := RandRange(4, 4+n*VShareSize-1)
-
-					_, m, err := shares2.Unmarshal(bs[:], maxLen)
-					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal(maxLen - max))
-				}
+				It("should return an error when the memory quota is too small", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.UnmarshalRemTooSmall(t)).To(Succeed())
+					}
+				})
 			})
 		})
 	})
@@ -899,42 +740,48 @@ var _ = Describe("Verifiable secret sharing", func() {
 	Context("VSS Checker", func() {
 		trials := 1000
 
-		var checker VSSChecker
+		Context("surge", func() {
+			t := reflect.TypeOf(VSSChecker{})
 
-		It("should marshall and unmarshall with surge successfully", func() {
-			var h secp256k1.Point
+			It("should be the same after marshalling and unmarshalling", func() {
+				for i := 0; i < trials; i++ {
+					Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
+				}
+			})
 
-			for i := 0; i < trials; i++ {
-				h = secp256k1.RandomPoint()
-				checker = NewVSSChecker(h)
-				bs, err := surge.ToBinary(&checker)
-				Expect(err).ToNot(HaveOccurred())
-				err = surge.FromBinary(&checker, bs[:])
-				Expect(err).ToNot(HaveOccurred())
-			}
-		})
+			It("should not panic when fuzzing", func() {
+				for i := 0; i < trials; i++ {
+					Expect(func() { surgeutil.Fuzz(t) }).ToNot(Panic())
+				}
+			})
 
-		It("should be able to unmarshal into an empty struct", func() {
-			var bs [secp256k1.PointSize]byte
-			checker1 := NewVSSChecker(h)
-			checker2 := VSSChecker{}
+			Context("marshalling", func() {
+				It("should return an error when the buffer is too small", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.MarshalBufTooSmall(t)).To(Succeed())
+					}
+				})
 
-			_, _, _ = checker1.Marshal(bs[:], checker1.SizeHint())
-			_, m, err := checker2.Unmarshal(bs[:], checker1.SizeHint())
-			Expect(err).ToNot(HaveOccurred())
-			Expect(m).To(Equal(0))
-		})
+				It("should return an error when the memory quota is too small", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.MarshalRemTooSmall(t)).To(Succeed())
+					}
+				})
+			})
 
-		Specify("unmarhsalling should return an error if the data isn't valid", func() {
-			var bs [secp256k1.PointSize]byte
+			Context("unmarshalling", func() {
+				It("should return an error when the buffer is too small", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.UnmarshalBufTooSmall(t)).To(Succeed())
+					}
+				})
 
-			for i := 0; i < trials; i++ {
-				randomInvalidCurvePoint(bs[:])
-
-				_, m, err := checker.Unmarshal(bs[:], secp256k1.PointSize)
-				Expect(err).To(HaveOccurred())
-				Expect(m).To(Equal(0))
-			}
+				It("should return an error when the memory quota is too small", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.UnmarshalRemTooSmall(t)).To(Succeed())
+					}
+				})
+			})
 		})
 	})
 
@@ -944,7 +791,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 		var k int
 		var secret secp256k1.Fn
-		var bs [4 + n*secp256k1.FnSize + secp256k1.PointSize]byte
 
 		indices := RandomIndices(n)
 		vshares := make(VerifiableShares, n)
@@ -974,135 +820,47 @@ var _ = Describe("Verifiable secret sharing", func() {
 			}
 		})
 
-		It("should be able to unmarshal into an empty struct", func() {
-			vssharer1 := NewVSSharer(indices, h)
-			vssharer2 := VSSharer{}
+		Context("surge", func() {
+			t := reflect.TypeOf(VSSharer{})
 
-			_, _, _ = vssharer1.Marshal(bs[:], vssharer1.SizeHint())
-			_, m, err := vssharer2.Unmarshal(bs[:], vssharer1.SizeHint())
-			Expect(err).ToNot(HaveOccurred())
-			Expect(m).To(Equal(0))
-		})
-
-		Context("Marhsalling errors", func() {
-			It("should fail if the writer is not big enough", func() {
-				vssharer = NewVSSharer(indices, h)
-
+			It("should be the same after marshalling and unmarshalling", func() {
 				for i := 0; i < trials; i++ {
-					//
-					// Error marshalling the sharer.
-					//
-
-					// Can't write slice length.
-					max := rand.Intn(4)
-					_, rem, err := vssharer.Marshal(bs[:], vssharer.SizeHint())
-					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal(vssharer.SizeHint() - max))
-
-					// Can't write all indices.
-					max = RandRange(4, vssharer.SizeHint()-h.SizeHint()-1)
-					_, rem, err = vssharer.Marshal(bs[:], vssharer.SizeHint())
-					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal(vssharer.SizeHint() - max))
-
-					//
-					// Error marshalling h.
-					//
-					max = RandRange(vssharer.SizeHint()-h.SizeHint(), vssharer.SizeHint()-1)
-					_, rem, err = vssharer.Marshal(bs[:], vssharer.SizeHint())
-					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal(vssharer.SizeHint() - max))
+					Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
 				}
 			})
 
-			It("should fail if the max is not big enough", func() {
-				vssharer = NewVSSharer(indices, h)
-
+			It("should not panic when fuzzing", func() {
 				for i := 0; i < trials; i++ {
-					//
-					// Error marshalling the sharer.
-					//
-
-					// Can't write slice length.
-					max := rand.Intn(4)
-					_, rem, err := vssharer.Marshal(bs[:], max)
-					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal(max))
-
-					// Can't write all indices.
-					max = RandRange(4, vssharer.SizeHint()-h.SizeHint()-1)
-					_, rem, err = vssharer.Marshal(bs[:], max)
-					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal((max - 4) % secp256k1.FnSize))
-
-					//
-					// Error marshalling h.
-					//
-					max = RandRange(vssharer.SizeHint()-h.SizeHint(), vssharer.SizeHint()-1)
-					_, rem, err = vssharer.Marshal(bs[:], max)
-					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal(max - vssharer.SizeHint() + h.SizeHint()))
+					Expect(func() { surgeutil.Fuzz(t) }).ToNot(Panic())
 				}
 			})
 
-			It("should correctly report the number of indices", func() {
-				Expect(vssharer.N()).To(Equal(n))
-			})
-		})
+			Context("marshalling", func() {
+				It("should return an error when the buffer is too small", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.MarshalBufTooSmall(t)).To(Succeed())
+					}
+				})
 
-		Context("Unmarshalling errors", func() {
-			It("should error if unmarshalling with not enough remaining bytes for the slice len", func() {
-				vssharer = VSSharer{}
-
-				for i := 0; i < trials; i++ {
-					max := rand.Intn(4)
-					_, m, err := vssharer.Unmarshal(bs[:], max)
-					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal(max))
-				}
+				It("should return an error when the memory quota is too small", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.MarshalRemTooSmall(t)).To(Succeed())
+					}
+				})
 			})
 
-			It("should error if unmarshalling with not enough remaining bytes for the indices", func() {
-				for i := 0; i < trials; i++ {
-					k := rand.Intn(n) + 1
-					readCap := RandRange(4, secp256k1.FnSize*k+4-1)
-					RandomSliceBytes(bs[:], k, secp256k1.FnSize, FillRandSecp)
-					_, m, err := vssharer.Unmarshal(bs[:], readCap)
-					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal(readCap - 4))
-				}
-			})
+			Context("unmarshalling", func() {
+				It("should return an error when the buffer is too small", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.UnmarshalBufTooSmall(t)).To(Succeed())
+					}
+				})
 
-			It("should error if unmarshalling with not enough remaining bytes for h", func() {
-				for i := 0; i < trials; i++ {
-					readCap := RandRange(4+secp256k1.FnSize*n, 4+secp256k1.FnSize*n+h.SizeHint()-1)
-					RandomSliceBytes(bs[:], n, secp256k1.FnSize, FillRandSecp)
-					_, m, err := vssharer.Unmarshal(bs[:], readCap)
-					Expect(err).To(HaveOccurred())
-					Expect(m).To(Equal(readCap - 4 - secp256k1.FnSize*n))
-				}
-			})
-
-			It("should error if unmarshalling without enough data", func() {
-				for i := 0; i < trials; i++ {
-					k := rand.Intn(n) + 1
-					indices = RandomIndices(k)
-					vssharer = NewVSSharer(indices, h)
-
-					// Error unmarshalling slice length.
-					max := rand.Intn(4)
-					_, rem, err := vssharer.Unmarshal(bs[:], vssharer.SizeHint())
-					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal(vssharer.SizeHint() - max))
-
-					// Error unmarshalling an index.
-					max = RandRange(4, vssharer.SizeHint()-h.SizeHint()-1)
-					binary.BigEndian.PutUint32(bs[:4], uint32(k))
-					size := k*secp256k1.FnSize + 4
-					_, rem, err = vssharer.Unmarshal(bs[:], size)
-					Expect(err).To(HaveOccurred())
-					Expect(rem).To(Equal(size - max))
-				}
+				It("should return an error when the memory quota is too small", func() {
+					for i := 0; i < trials; i++ {
+						Expect(surgeutil.UnmarshalRemTooSmall(t)).To(Succeed())
+					}
+				})
 			})
 		})
 	})

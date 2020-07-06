@@ -2,6 +2,8 @@ package shamir
 
 import (
 	"fmt"
+	"math/rand"
+	"reflect"
 
 	"github.com/renproject/secp256k1"
 	"github.com/renproject/surge"
@@ -45,9 +47,14 @@ func (shares *Shares) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 		return buf, rem, err
 	}
 
+	// TODO: Consider overflow.
 	c := l * uint32(ShareSize)
 	if uint32(len(buf)) < c || uint32(rem) < c {
 		return buf, rem, surge.ErrUnexpectedEndOfBuffer
+	}
+
+	if *shares == nil {
+		*shares = make(Shares, 0)
 	}
 
 	*shares = (*shares)[:0]
@@ -64,13 +71,17 @@ func (shares *Shares) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 
 // Share represents a single share in a Shamir secret sharing scheme.
 type Share struct {
-	index secp256k1.Fn
-	value secp256k1.Fn
+	index, value secp256k1.Fn
 }
 
 // NewShare constructs a new Shamir share from an index and a value.
 func NewShare(index secp256k1.Fn, value secp256k1.Fn) Share {
 	return Share{index, value}
+}
+
+// Generate implements the quick.Generator interface.
+func (s Share) Generate(_ *rand.Rand, _ int) reflect.Value {
+	return reflect.ValueOf(NewShare(secp256k1.RandomFn(), secp256k1.RandomFn()))
 }
 
 // PutBytes serialises the share into bytes and writes these bytes into the
@@ -101,10 +112,10 @@ func (s *Share) Eq(other *Share) bool {
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (s *Share) SizeHint() int { return s.index.SizeHint() + s.value.SizeHint() }
+func (s Share) SizeHint() int { return s.index.SizeHint() + s.value.SizeHint() }
 
 // Marshal implements the surge.Marshaler interface.
-func (s *Share) Marshal(buf []byte, rem int) ([]byte, int, error) {
+func (s Share) Marshal(buf []byte, rem int) ([]byte, int, error) {
 	buf, rem, err := s.index.Marshal(buf, rem)
 	if err != nil {
 		return buf, rem, err
@@ -121,8 +132,7 @@ func (s *Share) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 		return buf, rem, err
 	}
 
-	buf, rem, err = s.value.Unmarshal(buf, rem)
-	return buf, rem, err
+	return s.value.Unmarshal(buf, rem)
 }
 
 // Index returns a copy of the index of the share.
@@ -178,11 +188,20 @@ type Sharer struct {
 	coeffs  []secp256k1.Fn
 }
 
+// Generate implements the quick.Generator interface.
+func (sharer Sharer) Generate(rand *rand.Rand, size int) reflect.Value {
+	indices := make([]secp256k1.Fn, rand.Intn(size))
+	for i := range indices {
+		indices[i] = secp256k1.RandomFn()
+	}
+	return reflect.ValueOf(NewSharer(indices))
+}
+
 // SizeHint implements the surge.SizeHinter interface.
-func (sharer *Sharer) SizeHint() int { return surge.SizeHintU32 + len(sharer.indices)*secp256k1.FnSize }
+func (sharer Sharer) SizeHint() int { return surge.SizeHintU32 + len(sharer.indices)*secp256k1.FnSize }
 
 // Marshal implements the surge.Marshaler interface.
-func (sharer *Sharer) Marshal(buf []byte, rem int) ([]byte, int, error) {
+func (sharer Sharer) Marshal(buf []byte, rem int) ([]byte, int, error) {
 	return marshalIndices(sharer.indices, buf, rem)
 }
 
@@ -233,6 +252,10 @@ func unmarshalIndices(dst *[]secp256k1.Fn, buf []byte, rem int) ([]byte, int, er
 	c := l * uint32(secp256k1.FnSize)
 	if uint32(len(buf)) < c || uint32(rem) < c {
 		return buf, rem, surge.ErrUnexpectedEndOfBuffer
+	}
+
+	if *dst == nil {
+		*dst = make([]secp256k1.Fn, 0)
 	}
 
 	*dst = (*dst)[:0]
@@ -340,11 +363,20 @@ type Reconstructor struct {
 	complement []int
 }
 
+// Generate implements the quick.Generator interface.
+func (r Reconstructor) Generate(rand *rand.Rand, size int) reflect.Value {
+	indices := make([]secp256k1.Fn, rand.Intn(size))
+	for i := range indices {
+		indices[i] = secp256k1.RandomFn()
+	}
+	return reflect.ValueOf(NewReconstructor(indices))
+}
+
 // SizeHint implements the surge.SizeHinter interface.
-func (r *Reconstructor) SizeHint() int { return surge.SizeHintU32 + len(r.indices)*secp256k1.FnSize }
+func (r Reconstructor) SizeHint() int { return surge.SizeHintU32 + len(r.indices)*secp256k1.FnSize }
 
 // Marshal implements the surge.Marshaler interface.
-func (r *Reconstructor) Marshal(buf []byte, rem int) ([]byte, int, error) {
+func (r Reconstructor) Marshal(buf []byte, rem int) ([]byte, int, error) {
 	return marshalIndices(r.indices, buf, rem)
 }
 

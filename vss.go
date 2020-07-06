@@ -2,6 +2,8 @@ package shamir
 
 import (
 	"encoding/binary"
+	"math/rand"
+	"reflect"
 
 	"github.com/renproject/secp256k1"
 	"github.com/renproject/surge"
@@ -47,6 +49,10 @@ func (vshares *VerifiableShares) Unmarshal(buf []byte, rem int) ([]byte, int, er
 		return buf, rem, surge.ErrUnexpectedEndOfBuffer
 	}
 
+	if *vshares == nil {
+		*vshares = make(VerifiableShares, 0)
+	}
+
 	*vshares = (*vshares)[:0]
 	for i := uint32(0); i < l; i++ {
 		*vshares = append(*vshares, VerifiableShare{})
@@ -75,6 +81,16 @@ func (vshares VerifiableShares) Shares() Shares {
 type VerifiableShare struct {
 	share Share
 	r     secp256k1.Fn
+}
+
+// Generate implements the quick.Generator interface.
+func (vs VerifiableShare) Generate(_ *rand.Rand, _ int) reflect.Value {
+	return reflect.ValueOf(
+		NewVerifiableShare(
+			NewShare(secp256k1.RandomFn(), secp256k1.RandomFn()),
+			secp256k1.RandomFn(),
+		),
+	)
 }
 
 // NewVerifiableShare constructs a new VerifiableShare from the given Share and
@@ -113,10 +129,10 @@ func (vs *VerifiableShare) Eq(other *VerifiableShare) bool {
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (vs *VerifiableShare) SizeHint() int { return vs.share.SizeHint() + vs.r.SizeHint() }
+func (vs VerifiableShare) SizeHint() int { return vs.share.SizeHint() + vs.r.SizeHint() }
 
 // Marshal implements the surge.Marshaler interface.
-func (vs *VerifiableShare) Marshal(buf []byte, rem int) ([]byte, int, error) {
+func (vs VerifiableShare) Marshal(buf []byte, rem int) ([]byte, int, error) {
 	buf, rem, err := vs.share.Marshal(buf, rem)
 	if err != nil {
 		return buf, rem, err
@@ -172,6 +188,15 @@ type Commitment struct {
 	// Curve points that represent Pedersen commitments to each of the
 	// coefficients.  Index i corresponds to coefficient c_i.
 	points []secp256k1.Point
+}
+
+// Generate implements the quick.Generator interface.
+func (c Commitment) Generate(rand *rand.Rand, size int) reflect.Value {
+	points := make([]secp256k1.Point, rand.Intn(size))
+	for i := range points {
+		points[i] = secp256k1.RandomPoint()
+	}
+	return reflect.ValueOf(Commitment{points})
 }
 
 // Eq returns true if the two commitments are equal (each curve point is
@@ -248,7 +273,9 @@ func (c *Commitment) SetBytes(bs []byte) {
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (c Commitment) SizeHint() int { return secp256k1.PointSize*len(c.points) + 4 }
+func (c Commitment) SizeHint() int {
+	return secp256k1.PointSizeMarshalled*len(c.points) + surge.SizeHintU32
+}
 
 // Marshal implements the surge.Marshaler interface.
 func (c Commitment) Marshal(buf []byte, rem int) ([]byte, int, error) {
@@ -277,8 +304,12 @@ func (c *Commitment) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 
 	// TODO: Consider overflow.
 	lim := l * uint32(secp256k1.PointSize)
-	if uint32(len(buf)) < lim || uint32(rem) < lim {
+	if uint32(rem) < lim {
 		return buf, rem, surge.ErrUnexpectedEndOfBuffer
+	}
+
+	if c.points == nil {
+		c.points = make([]secp256k1.Point, 0)
 	}
 
 	c.points = c.points[:0]
@@ -369,11 +400,16 @@ type VSSChecker struct {
 	eval, gPow, hPow secp256k1.Point
 }
 
+// Generate implements the quick.Generator interface.
+func (checker VSSChecker) Generate(_ *rand.Rand, _ int) reflect.Value {
+	return reflect.ValueOf(NewVSSChecker(secp256k1.RandomPoint()))
+}
+
 // SizeHint implements the surge.SizeHinter interface.
-func (checker *VSSChecker) SizeHint() int { return checker.h.SizeHint() }
+func (checker VSSChecker) SizeHint() int { return checker.h.SizeHint() }
 
 // Marshal implements the surge.Marshaler interface.
-func (checker *VSSChecker) Marshal(buf []byte, rem int) ([]byte, int, error) {
+func (checker VSSChecker) Marshal(buf []byte, rem int) ([]byte, int, error) {
 	return checker.h.Marshal(buf, rem)
 }
 
@@ -419,11 +455,20 @@ type VSSharer struct {
 	hPow   secp256k1.Point
 }
 
+// Generate implements the quick.Generator interface.
+func (s VSSharer) Generate(rand *rand.Rand, size int) reflect.Value {
+	indices := make([]secp256k1.Fn, rand.Intn(size))
+	for i := range indices {
+		indices[i] = secp256k1.RandomFn()
+	}
+	return reflect.ValueOf(NewVSSharer(indices, secp256k1.RandomPoint()))
+}
+
 // SizeHint implements the surge.SizeHinter interface.
-func (s *VSSharer) SizeHint() int { return s.sharer.SizeHint() + s.h.SizeHint() }
+func (s VSSharer) SizeHint() int { return s.sharer.SizeHint() + s.h.SizeHint() }
 
 // Marshal implements the surge.Marshaler interface.
-func (s *VSSharer) Marshal(buf []byte, rem int) ([]byte, int, error) {
+func (s VSSharer) Marshal(buf []byte, rem int) ([]byte, int, error) {
 	buf, rem, err := s.sharer.Marshal(buf, rem)
 	if err != nil {
 		return buf, rem, err
