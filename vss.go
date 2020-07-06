@@ -1,7 +1,6 @@
 package shamir
 
 import (
-	"encoding/binary"
 	"math/rand"
 	"reflect"
 
@@ -101,28 +100,6 @@ func NewVerifiableShare(share Share, r secp256k1.Fn) VerifiableShare {
 	return VerifiableShare{share, r}
 }
 
-// PutBytes serialises the verifiable share into bytes and writes these bytes
-// into the given destination slice. A verifiable serialises to 96 bytes.
-//
-// Panics: If the destination slice has length less than 96, this function will
-// panic.
-func (vs *VerifiableShare) PutBytes(dst []byte) {
-	// Byte format:
-	//
-	// - First 64 bytes: serialised Shamir share.
-	// - Last 32 bytes: decommitment value in big endian format.
-
-	vs.share.PutBytes(dst[:ShareSize])
-	vs.r.PutB32(dst[ShareSize:])
-}
-
-// SetBytes sets the caller from the given bytes. The format of these bytes is
-// that determined by the PutBytes method.
-func (vs *VerifiableShare) SetBytes(bs []byte) {
-	vs.share.SetBytes(bs[:ShareSize])
-	vs.r.SetB32(bs[ShareSize:])
-}
-
 // Eq returns true if the two verifiable shares are equal, and false otherwise.
 func (vs *VerifiableShare) Eq(other *VerifiableShare) bool {
 	return vs.share.Eq(&other.share) && vs.r.Eq(&other.r)
@@ -184,30 +161,26 @@ func (vs *VerifiableShare) Scale(other *VerifiableShare, scale *secp256k1.Fn) {
 }
 
 // A Commitment is used to verify that a sharing has been performed correctly.
-type Commitment struct {
-	// Curve points that represent Pedersen commitments to each of the
-	// coefficients.  Index i corresponds to coefficient c_i.
-	points []secp256k1.Point
-}
+type Commitment []secp256k1.Point
 
 // Generate implements the quick.Generator interface.
 func (c Commitment) Generate(rand *rand.Rand, size int) reflect.Value {
-	points := make([]secp256k1.Point, rand.Intn(size))
-	for i := range points {
-		points[i] = secp256k1.RandomPoint()
+	com := make(Commitment, rand.Intn(size))
+	for i := range com {
+		com[i] = secp256k1.RandomPoint()
 	}
-	return reflect.ValueOf(Commitment{points})
+	return reflect.ValueOf(com)
 }
 
 // Eq returns true if the two commitments are equal (each curve point is
 // equal), and false otherwise.
-func (c *Commitment) Eq(other *Commitment) bool {
-	if len(c.points) != len(other.points) {
+func (c Commitment) Eq(other Commitment) bool {
+	if len(c) != len(other) {
 		return false
 	}
 
-	for i := range c.points {
-		if !c.points[i].Eq(&other.points[i]) {
+	for i := range c {
+		if !c[i].Eq(&other[i]) {
 			return false
 		}
 	}
@@ -215,77 +188,43 @@ func (c *Commitment) Eq(other *Commitment) bool {
 	return true
 }
 
+// Append a point to the commitment.
+func (c *Commitment) Append(p secp256k1.Point) {
+	*c = append(*c, p)
+}
+
 // Len returns the number of curve points in the commitment. This is equal to
 // the reconstruction threshold of the associated verifiable sharing.
-func (c *Commitment) Len() int {
-	return len(c.points)
+func (c Commitment) Len() int {
+	return len(c)
 }
 
 // Set the calling commitment to be equal to the given commitment.
 func (c *Commitment) Set(other Commitment) {
-	if len(c.points) < len(other.points) {
-		*c = NewCommitmentWithCapacity(len(other.points))
+	if len(*c) < len(other) {
+		*c = NewCommitmentWithCapacity(len(other))
 	}
 
-	c.points = c.points[:len(other.points)]
-	for i := range c.points {
-		c.points[i] = other.points[i]
-	}
-}
-
-// GetPoint returns the elliptic curve point at the given index of the commitment
-func (c Commitment) GetPoint(index int) secp256k1.Point {
-	return c.points[index]
-}
-
-// AppendPoint appends an elliptic curve point to the given commitment
-func (c *Commitment) AppendPoint(point secp256k1.Point) {
-	c.points = append(c.points, point)
-}
-
-// PutBytes serialises the commitment into bytes and writes these bytes into
-// the given destination slice.
-//
-// Panics: If the destination slice has length smaller than required, this
-// function may panic. The exact length requirement can be obtained from the
-// SizeHint method.
-func (c *Commitment) PutBytes(dst []byte) {
-	// Byte format:
-	//
-	// - First 4 bytes: slice length in big endian as a uint32.
-	// - Remaining bytes: successive groups of 64 bytes containing the
-	// serialised curve points.
-
-	binary.BigEndian.PutUint32(dst[:4], uint32(len(c.points)))
-	for i, p := range c.points {
-		p.PutBytes(dst[secp256k1.PointSize*i+4:])
-	}
-}
-
-// SetBytes sets the caller from the given bytes. The format of these bytes is
-// that determined by the PutBytes method.
-func (c *Commitment) SetBytes(bs []byte) {
-	nPoints := int(binary.BigEndian.Uint32(bs[:4]))
-	c.points = c.points[:nPoints]
-	for i := 0; i < nPoints; i++ {
-		c.points[i].SetBytes(bs[secp256k1.PointSize*i+4:])
+	*c = (*c)[:len(other)]
+	for i := range *c {
+		(*c)[i] = other[i]
 	}
 }
 
 // SizeHint implements the surge.SizeHinter interface.
 func (c Commitment) SizeHint() int {
-	return secp256k1.PointSizeMarshalled*len(c.points) + surge.SizeHintU32
+	return secp256k1.PointSizeMarshalled*len(c) + surge.SizeHintU32
 }
 
 // Marshal implements the surge.Marshaler interface.
 func (c Commitment) Marshal(buf []byte, rem int) ([]byte, int, error) {
-	buf, rem, err := surge.MarshalU32(uint32(len(c.points)), buf, rem)
+	buf, rem, err := surge.MarshalU32(uint32(len(c)), buf, rem)
 	if err != nil {
 		return buf, rem, err
 	}
 
-	for i := range c.points {
-		buf, rem, err = c.points[i].Marshal(buf, rem)
+	for i := range c {
+		buf, rem, err = c[i].Marshal(buf, rem)
 		if err != nil {
 			return buf, rem, err
 		}
@@ -308,14 +247,14 @@ func (c *Commitment) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 		return buf, rem, surge.ErrUnexpectedEndOfBuffer
 	}
 
-	if c.points == nil {
-		c.points = make([]secp256k1.Point, 0)
+	if *c == nil {
+		*c = make([]secp256k1.Point, 0)
 	}
 
-	c.points = c.points[:0]
+	*c = (*c)[:0]
 	for i := uint32(0); i < l; i++ {
-		c.points = append(c.points, secp256k1.Point{})
-		buf, rem, err = c.points[i].Unmarshal(buf, rem)
+		*c = append(*c, secp256k1.Point{})
+		buf, rem, err = (*c)[i].Unmarshal(buf, rem)
 		if err != nil {
 			return buf, rem, err
 		}
@@ -327,12 +266,7 @@ func (c *Commitment) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 // This capacity represents the maximum reconstruction threshold, k, that this
 // commitment can be used for.
 func NewCommitmentWithCapacity(k int) Commitment {
-	points := make([]secp256k1.Point, k)
-	for i := range points {
-		points[i] = secp256k1.Point{}
-	}
-	points = points[:0]
-	return Commitment{points}
+	return make(Commitment, 0, k)
 }
 
 // Add takes two input commitments and stores in the caller the commitment that
@@ -346,19 +280,19 @@ func NewCommitmentWithCapacity(k int) Commitment {
 // Panics: If the destination commitment does not have capacity at least as big
 // as the greater of the capacities of the two inputs, then this function will
 // panic.
-func (c *Commitment) Add(a, b *Commitment) {
+func (c *Commitment) Add(a, b Commitment) {
 	var smaller, larger []secp256k1.Point
-	if len(a.points) > len(b.points) {
-		smaller, larger = b.points, a.points
+	if len(a) > len(b) {
+		smaller, larger = b, a
 	} else {
-		smaller, larger = a.points, b.points
+		smaller, larger = a, b
 	}
 
-	c.points = c.points[:len(larger)]
+	*c = (*c)[:len(larger)]
 	for i := range smaller {
-		c.points[i].Add(&smaller[i], &larger[i])
+		(*c)[i].Add(&smaller[i], &larger[i])
 	}
-	copy(c.points[len(smaller):], larger[len(smaller):])
+	copy((*c)[len(smaller):], larger[len(smaller):])
 }
 
 // Scale takes an input commitment and stores in the caller the commitment that
@@ -370,19 +304,19 @@ func (c *Commitment) Add(a, b *Commitment) {
 //
 // Panics: If the destination commitment does not have capacity at least as big
 // as the input commitment, then this function will panic.
-func (c *Commitment) Scale(other *Commitment, scale *secp256k1.Fn) {
-	c.points = c.points[:len(other.points)]
-	for i := range c.points {
-		c.points[i].Scale(&other.points[i], scale)
+func (c *Commitment) Scale(other Commitment, scale *secp256k1.Fn) {
+	*c = (*c)[:len(other)]
+	for i := range *c {
+		(*c)[i].Scale(&other[i], scale)
 	}
 }
 
 // Evaluates the sharing polynomial at the given index "in the exponent".
 func (c *Commitment) evaluate(eval *secp256k1.Point, index *secp256k1.Fn) {
-	*eval = c.points[len(c.points)-1]
-	for i := len(c.points) - 2; i >= 0; i-- {
+	*eval = (*c)[len(*c)-1]
+	for i := len(*c) - 2; i >= 0; i-- {
 		eval.Scale(eval, index)
-		eval.Add(eval, &c.points[i])
+		eval.Add(eval, &(*c)[i])
 	}
 }
 
@@ -528,9 +462,9 @@ func (s *VSSharer) Share(vshares *VerifiableShares, c *Commitment, secret secp25
 
 	// At this point, the sharer should still have the randomly picked
 	// coefficients in its cache, which we need to use for the commitment.
-	c.points = c.points[:k]
+	*c = (*c)[:k]
 	for i, coeff := range s.sharer.coeffs {
-		c.points[i].BaseExp(&coeff)
+		(*c)[i].BaseExp(&coeff)
 	}
 
 	s.sharer.setRandomCoeffs(secp256k1.RandomFn(), k)
@@ -542,7 +476,7 @@ func (s *VSSharer) Share(vshares *VerifiableShares, c *Commitment, secret secp25
 	// Finish the computation of the commitments
 	for i, coeff := range s.sharer.coeffs {
 		s.hPow.Scale(&s.h, &coeff)
-		c.points[i].Add(&c.points[i], &s.hPow)
+		(*c)[i].Add(&(*c)[i], &s.hPow)
 	}
 
 	return nil

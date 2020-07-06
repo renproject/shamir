@@ -1,7 +1,6 @@
 package shamir_test
 
 import (
-	"encoding/binary"
 	"math/rand"
 	"testing"
 	"time"
@@ -191,7 +190,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 			_ = vssharer.Share(&vshares2, &c2, secret2, k2)
 
 			// Create the shares for the sum
-			cSummed.Add(&c1, &c2)
+			cSummed.Add(c1, c2)
 			for i := range vsharesSummed {
 				vsharesSummed[i].Add(&vshares1[i], &vshares2[i])
 			}
@@ -305,7 +304,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 			_ = vssharer.Share(&vshares, &c, secret, k)
 
 			// Create the scaled shares
-			cScaled.Scale(&c, &scale)
+			cScaled.Scale(c, &scale)
 			for i := range vsharesScaled {
 				vsharesScaled[i].Scale(&vshares[i], &scale)
 			}
@@ -391,46 +390,8 @@ var _ = Describe("Verifiable secret sharing", func() {
 	})
 
 	Context("Commitments", func() {
-		const maxK int = 10
-
-		var trials int
-		var com1, com2 Commitment
-		var bs [secp256k1.PointSize*maxK + 4]byte
-
-		BeforeEach(func() {
-			trials = 100
-			com1 = NewCommitmentWithCapacity(maxK)
-			com2 = NewCommitmentWithCapacity(maxK)
-		})
-
-		RandomCommitmentBytes := func(dst []byte, k int) {
-			var point secp256k1.Point
-			binary.BigEndian.PutUint32(dst[:4], uint32(k))
-			for i := 0; i < k; i++ {
-				point = secp256k1.RandomPoint()
-				point.PutBytes(dst[4+i*secp256k1.PointSize:])
-			}
-		}
-
-		var RandomiseCommitment func(*Commitment, int)
-		{
-			var tmpBs [secp256k1.PointSize*maxK + 4]byte
-			RandomiseCommitment = func(dst *Commitment, k int) {
-				RandomCommitmentBytes(tmpBs[:], k)
-				dst.SetBytes(tmpBs[:])
-			}
-		}
-
-		Specify("should be equal when they are the same", func() {
-			for i := 0; i < trials; i++ {
-				k := rand.Intn(maxK) + 1
-				RandomCommitmentBytes(bs[:], k)
-				com1.SetBytes(bs[:])
-				com2.SetBytes(bs[:])
-
-				Expect(com1.Eq(&com2)).To(BeTrue())
-			}
-		})
+		trials := 100
+		maxK := 10
 
 		Specify("should be unequal when they have different lengths", func() {
 			for i := 0; i < trials; i++ {
@@ -439,30 +400,31 @@ var _ = Describe("Verifiable secret sharing", func() {
 				for k2 == k1 {
 					k2 = rand.Intn(maxK) + 1
 				}
-				RandomiseCommitment(&com1, k1)
-				RandomiseCommitment(&com2, k2)
+				com1 := RandomCommitment(k1)
+				com2 := RandomCommitment(k2)
 
-				Expect(com1.Eq(&com2)).To(BeFalse())
+				Expect(com1.Eq(com2)).To(BeFalse())
 			}
 		})
 
 		Specify("should be unequal when they have different curve points", func() {
 			for i := 0; i < trials; i++ {
 				k := rand.Intn(maxK) + 1
-				RandomiseCommitment(&com1, k)
-				RandomiseCommitment(&com2, k)
+				com1 := RandomCommitment(k)
+				com2 := RandomCommitment(k)
 
-				Expect(com1.Eq(&com2)).To(BeFalse())
+				Expect(com1.Eq(com2)).To(BeFalse())
 			}
 		})
 
 		Specify("setting a commitment should make it equal to the argument", func() {
+			var com2 Commitment
 			for i := 0; i < trials; i++ {
 				k := rand.Intn(maxK) + 1
-				RandomiseCommitment(&com1, k)
+				com1 := RandomCommitment(k)
 				com2.Set(com1)
 
-				Expect(com1.Eq(&com2)).To(BeTrue())
+				Expect(com1.Eq(com2)).To(BeTrue())
 			}
 		})
 
@@ -474,51 +436,26 @@ var _ = Describe("Verifiable secret sharing", func() {
 				com := NewCommitmentWithCapacity(k)
 				for j := 0; j < k; j++ {
 					points[j] = secp256k1.RandomPoint()
-					com.AppendPoint(points[j])
+					com.Append(points[j])
 				}
 
 				for j := 0; j < k; j++ {
-					p := com.GetPoint(j)
+					p := com[j]
 					Expect(p.Eq(&points[j])).To(BeTrue())
 				}
 			}
 		})
 
-		//
-		// Marshalling
-		//
-
-		Context("Marhsalling", func() {
-			Specify("marshalling a commitment to and from binary should leave it unchanged", func() {
-				for i := 0; i < trials; i++ {
-					k := rand.Intn(maxK) + 1
-					RandomiseCommitment(&com1, k)
-					nBytes := secp256k1.PointSize*com1.Len() + 4
-					com1.PutBytes(bs[:nBytes])
-					com2.SetBytes(bs[:nBytes])
-					Expect(com1.Eq(&com2)).To(BeTrue())
-				}
-			})
+		It("should return the correct number of curve points", func() {
+			for i := 0; i < trials; i++ {
+				k := rand.Intn(maxK) + 1
+				com := RandomCommitment(k)
+				Expect(com.Len()).To(Equal(k))
+			}
 		})
 	})
 
 	Context("Verifiable shares", func() {
-		trials := 1000
-		It("should be the same after marshalling to and from binary", func() {
-			var share1, share2 VerifiableShare
-			var bs [VShareSize]byte
-
-			for i := 0; i < trials; i++ {
-				share1 = NewVerifiableShare(
-					NewShare(secp256k1.RandomFn(), secp256k1.RandomFn()),
-					secp256k1.RandomFn(),
-				)
-				share1.PutBytes(bs[:])
-				share2.SetBytes(bs[:])
-				Expect(share1.Eq(&share2)).To(BeTrue())
-			}
-		})
-
 		It("should be able to unmarshal into an empty struct", func() {
 			var bs [VShareSize]byte
 			share1 := NewVerifiableShare(
@@ -635,6 +572,14 @@ var _ = Describe("Verifiable secret sharing", func() {
 				for _, share := range vshares {
 					Expect(checker.IsValid(&c, &share)).To(BeTrue())
 				}
+			}
+		})
+
+		It("should correctly give the number of indices", func() {
+			for i := 0; i < trials; i++ {
+				n := RandRange(1, n)
+				vssharer := NewVSSharer(RandomIndices(n), h)
+				Expect(vssharer.N()).To(Equal(n))
 			}
 		})
 	})

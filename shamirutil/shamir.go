@@ -7,6 +7,16 @@ import (
 	"github.com/renproject/shamir"
 )
 
+// RandomCommitment constructs and returns a random commitment with the given
+// number of curve points.
+func RandomCommitment(k int) shamir.Commitment {
+	c := make(shamir.Commitment, k)
+	for i := range c {
+		c[i] = secp256k1.RandomPoint()
+	}
+	return c
+}
+
 // RandomIndices initialises and returns a slice of n indices, each of which is
 // random. Often it is desired that each index is distinct. This function does
 // not gaurantee this, however the chance of two indices being equal is
