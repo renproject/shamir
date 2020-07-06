@@ -80,28 +80,6 @@ func (s Share) Generate(_ *rand.Rand, _ int) reflect.Value {
 	return reflect.ValueOf(NewShare(secp256k1.RandomFn(), secp256k1.RandomFn()))
 }
 
-// PutBytes serialises the share into bytes and writes these bytes into the
-// given destination slice. A serialises to 64 bytes.
-//
-// Panics: If the destination slice has length less than 64, this function will
-// panic.
-func (s *Share) PutBytes(dst []byte) {
-	// Byte format:
-	//
-	// - First 32 bytes: index in big endian format.
-	// - Last 32 bytes: value in big endian format.
-
-	s.index.PutB32(dst[:32])
-	s.value.PutB32(dst[32:])
-}
-
-// SetBytes sets the caller from the given bytes. The format of these bytes is
-// that determined by the PutBytes method.
-func (s *Share) SetBytes(bs []byte) {
-	s.index.SetB32(bs[:32])
-	s.value.SetB32(bs[32:])
-}
-
 // Eq returns true if the two shares are equal, and false otherwise.
 func (s *Share) Eq(other *Share) bool {
 	return s.index.Eq(&other.index) && s.value.Eq(&other.value)

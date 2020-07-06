@@ -202,15 +202,6 @@ var _ = Describe("Shamir Secret Sharing", func() {
 		// Marshaling
 		//
 
-		It("should be the same after marshalling to and from binary", func() {
-			for i := 0; i < trials; i++ {
-				share1 = NewShare(secp256k1.RandomFn(), secp256k1.RandomFn())
-				share1.PutBytes(bs[:])
-				share2.SetBytes(bs[:])
-				Expect(share1.Eq(&share2)).To(BeTrue())
-			}
-		})
-
 		It("should be able to unmarshal into an empty struct", func() {
 			share1 := NewShare(secp256k1.RandomFn(), secp256k1.RandomFn())
 			share2 := Share{}
