@@ -3,13 +3,11 @@ package shamir_test
 import (
 	"encoding/binary"
 	"math/rand"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/renproject/secp256k1"
 	"github.com/renproject/surge"
-	"github.com/renproject/surge/surgeutil"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -501,50 +499,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 					Expect(com1.Eq(&com2)).To(BeTrue())
 				}
 			})
-
-			Context("surge", func() {
-				t := reflect.TypeOf(Commitment{})
-
-				It("should be the same after marshalling and unmarshalling", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
-					}
-				})
-
-				It("should not panic when fuzzing", func() {
-					for i := 0; i < trials; i++ {
-						Expect(func() { surgeutil.Fuzz(t) }).ToNot(Panic())
-					}
-				})
-
-				Context("marshalling", func() {
-					It("should return an error when the buffer is too small", func() {
-						for i := 0; i < trials; i++ {
-							Expect(surgeutil.MarshalBufTooSmall(t)).To(Succeed())
-						}
-					})
-
-					It("should return an error when the memory quota is too small", func() {
-						for i := 0; i < trials; i++ {
-							Expect(surgeutil.MarshalRemTooSmall(t)).To(Succeed())
-						}
-					})
-				})
-
-				Context("unmarshalling", func() {
-					It("should return an error when the buffer is too small", func() {
-						for i := 0; i < trials; i++ {
-							Expect(surgeutil.UnmarshalBufTooSmall(t)).To(Succeed())
-						}
-					})
-
-					It("should return an error when the memory quota is too small", func() {
-						for i := 0; i < trials; i++ {
-							Expect(surgeutil.UnmarshalRemTooSmall(t)).To(Succeed())
-						}
-					})
-				})
-			})
 		})
 	})
 
@@ -563,50 +517,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 				share2.SetBytes(bs[:])
 				Expect(share1.Eq(&share2)).To(BeTrue())
 			}
-		})
-
-		Context("surge", func() {
-			t := reflect.TypeOf(VerifiableShare{})
-
-			It("should be the same after marshalling and unmarshalling", func() {
-				for i := 0; i < trials; i++ {
-					Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
-				}
-			})
-
-			It("should not panic when fuzzing", func() {
-				for i := 0; i < trials; i++ {
-					Expect(func() { surgeutil.Fuzz(t) }).ToNot(Panic())
-				}
-			})
-
-			Context("marshalling", func() {
-				It("should return an error when the buffer is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalBufTooSmall(t)).To(Succeed())
-					}
-				})
-
-				It("should return an error when the memory quota is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalRemTooSmall(t)).To(Succeed())
-					}
-				})
-			})
-
-			Context("unmarshalling", func() {
-				It("should return an error when the buffer is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.UnmarshalBufTooSmall(t)).To(Succeed())
-					}
-				})
-
-				It("should return an error when the memory quota is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.UnmarshalRemTooSmall(t)).To(Succeed())
-					}
-				})
-			})
 		})
 
 		It("should be able to unmarshal into an empty struct", func() {
@@ -691,98 +601,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 			Expect(m).To(Equal(0))
 			Expect(VerifiableSharesAreEq(shares1, shares2)).To(BeTrue())
 		})
-
-		Context("surge", func() {
-			t := reflect.TypeOf(VerifiableShares{})
-
-			It("should be the same after marshalling and unmarshalling", func() {
-				for i := 0; i < trials; i++ {
-					Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
-				}
-			})
-
-			It("should not panic when fuzzing", func() {
-				for i := 0; i < trials; i++ {
-					Expect(func() { surgeutil.Fuzz(t) }).ToNot(Panic())
-				}
-			})
-
-			Context("marshalling", func() {
-				It("should return an error when the buffer is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalBufTooSmall(t)).To(Succeed())
-					}
-				})
-
-				It("should return an error when the memory quota is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalRemTooSmall(t)).To(Succeed())
-					}
-				})
-			})
-
-			Context("unmarshalling", func() {
-				It("should return an error when the buffer is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.UnmarshalBufTooSmall(t)).To(Succeed())
-					}
-				})
-
-				It("should return an error when the memory quota is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.UnmarshalRemTooSmall(t)).To(Succeed())
-					}
-				})
-			})
-		})
-	})
-
-	Context("VSS Checker", func() {
-		trials := 1000
-
-		Context("surge", func() {
-			t := reflect.TypeOf(VSSChecker{})
-
-			It("should be the same after marshalling and unmarshalling", func() {
-				for i := 0; i < trials; i++ {
-					Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
-				}
-			})
-
-			It("should not panic when fuzzing", func() {
-				for i := 0; i < trials; i++ {
-					Expect(func() { surgeutil.Fuzz(t) }).ToNot(Panic())
-				}
-			})
-
-			Context("marshalling", func() {
-				It("should return an error when the buffer is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalBufTooSmall(t)).To(Succeed())
-					}
-				})
-
-				It("should return an error when the memory quota is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalRemTooSmall(t)).To(Succeed())
-					}
-				})
-			})
-
-			Context("unmarshalling", func() {
-				It("should return an error when the buffer is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.UnmarshalBufTooSmall(t)).To(Succeed())
-					}
-				})
-
-				It("should return an error when the memory quota is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.UnmarshalRemTooSmall(t)).To(Succeed())
-					}
-				})
-			})
-		})
 	})
 
 	Context("VSS Sharer", func() {
@@ -818,50 +636,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 					Expect(checker.IsValid(&c, &share)).To(BeTrue())
 				}
 			}
-		})
-
-		Context("surge", func() {
-			t := reflect.TypeOf(VSSharer{})
-
-			It("should be the same after marshalling and unmarshalling", func() {
-				for i := 0; i < trials; i++ {
-					Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
-				}
-			})
-
-			It("should not panic when fuzzing", func() {
-				for i := 0; i < trials; i++ {
-					Expect(func() { surgeutil.Fuzz(t) }).ToNot(Panic())
-				}
-			})
-
-			Context("marshalling", func() {
-				It("should return an error when the buffer is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalBufTooSmall(t)).To(Succeed())
-					}
-				})
-
-				It("should return an error when the memory quota is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalRemTooSmall(t)).To(Succeed())
-					}
-				})
-			})
-
-			Context("unmarshalling", func() {
-				It("should return an error when the buffer is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.UnmarshalBufTooSmall(t)).To(Succeed())
-					}
-				})
-
-				It("should return an error when the memory quota is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.UnmarshalRemTooSmall(t)).To(Succeed())
-					}
-				})
-			})
 		})
 	})
 

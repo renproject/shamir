@@ -2,13 +2,11 @@ package shamir_test
 
 import (
 	"math/rand"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/renproject/secp256k1"
 	"github.com/renproject/surge"
-	"github.com/renproject/surge/surgeutil"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -213,50 +211,6 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			}
 		})
 
-		Context("surge", func() {
-			t := reflect.TypeOf(Share{})
-
-			It("should be the same after marshalling and unmarshalling", func() {
-				for i := 0; i < trials; i++ {
-					Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
-				}
-			})
-
-			It("should not panic when fuzzing", func() {
-				for i := 0; i < trials; i++ {
-					Expect(func() { surgeutil.Fuzz(t) }).ToNot(Panic())
-				}
-			})
-
-			Context("marshalling", func() {
-				It("should return an error when the buffer is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalBufTooSmall(t)).To(Succeed())
-					}
-				})
-
-				It("should return an error when the memory quota is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalRemTooSmall(t)).To(Succeed())
-					}
-				})
-			})
-
-			Context("unmarshalling", func() {
-				It("should return an error when the buffer is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.UnmarshalBufTooSmall(t)).To(Succeed())
-					}
-				})
-
-				It("should return an error when the memory quota is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.UnmarshalRemTooSmall(t)).To(Succeed())
-					}
-				})
-			})
-		})
-
 		It("should be able to unmarshal into an empty struct", func() {
 			share1 := NewShare(secp256k1.RandomFn(), secp256k1.RandomFn())
 			share2 := Share{}
@@ -319,50 +273,6 @@ var _ = Describe("Shamir Secret Sharing", func() {
 
 				Expect(SharesAreEq(shares1, shares2)).To(BeTrue())
 			}
-		})
-
-		Context("surge", func() {
-			t := reflect.TypeOf(Shares{})
-
-			It("should be the same after marshalling and unmarshalling", func() {
-				for i := 0; i < trials; i++ {
-					Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
-				}
-			})
-
-			It("should not panic when fuzzing", func() {
-				for i := 0; i < trials; i++ {
-					Expect(func() { surgeutil.Fuzz(t) }).ToNot(Panic())
-				}
-			})
-
-			Context("marshalling", func() {
-				It("should return an error when the buffer is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalBufTooSmall(t)).To(Succeed())
-					}
-				})
-
-				It("should return an error when the memory quota is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalRemTooSmall(t)).To(Succeed())
-					}
-				})
-			})
-
-			Context("unmarshalling", func() {
-				It("should return an error when the buffer is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.UnmarshalBufTooSmall(t)).To(Succeed())
-					}
-				})
-
-				It("should return an error when the memory quota is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.UnmarshalRemTooSmall(t)).To(Succeed())
-					}
-				})
-			})
 		})
 
 		It("should be able to unmarshal into an empty struct", func() {
@@ -465,50 +375,6 @@ var _ = Describe("Shamir Secret Sharing", func() {
 
 				Expect(SharesAreConsistent(shares, &reconstructor, k)).To(BeTrue())
 			}
-		})
-
-		Context("surge", func() {
-			t := reflect.TypeOf(Sharer{})
-
-			It("should be the same after marshalling and unmarshalling", func() {
-				for i := 0; i < trials; i++ {
-					Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
-				}
-			})
-
-			It("should not panic when fuzzing", func() {
-				for i := 0; i < trials; i++ {
-					Expect(func() { surgeutil.Fuzz(t) }).ToNot(Panic())
-				}
-			})
-
-			Context("marshalling", func() {
-				It("should return an error when the buffer is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalBufTooSmall(t)).To(Succeed())
-					}
-				})
-
-				It("should return an error when the memory quota is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalRemTooSmall(t)).To(Succeed())
-					}
-				})
-			})
-
-			Context("unmarshalling", func() {
-				It("should return an error when the buffer is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.UnmarshalBufTooSmall(t)).To(Succeed())
-					}
-				})
-
-				It("should return an error when the memory quota is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.UnmarshalRemTooSmall(t)).To(Succeed())
-					}
-				})
-			})
 		})
 
 		It("should be able to unmarshal into an empty struct", func() {
@@ -652,50 +518,6 @@ var _ = Describe("Shamir Secret Sharing", func() {
 
 				Expect(SharesAreConsistent(shares, &reconstructor, k)).To(BeTrue())
 			}
-		})
-
-		Context("surge", func() {
-			t := reflect.TypeOf(Reconstructor{})
-
-			It("should be the same after marshalling and unmarshalling", func() {
-				for i := 0; i < trials; i++ {
-					Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
-				}
-			})
-
-			It("should not panic when fuzzing", func() {
-				for i := 0; i < trials; i++ {
-					Expect(func() { surgeutil.Fuzz(t) }).ToNot(Panic())
-				}
-			})
-
-			Context("marshalling", func() {
-				It("should return an error when the buffer is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalBufTooSmall(t)).To(Succeed())
-					}
-				})
-
-				It("should return an error when the memory quota is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.MarshalRemTooSmall(t)).To(Succeed())
-					}
-				})
-			})
-
-			Context("unmarshalling", func() {
-				It("should return an error when the buffer is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.UnmarshalBufTooSmall(t)).To(Succeed())
-					}
-				})
-
-				It("should return an error when the memory quota is too small", func() {
-					for i := 0; i < trials; i++ {
-						Expect(surgeutil.UnmarshalRemTooSmall(t)).To(Succeed())
-					}
-				})
-			})
 		})
 
 		It("should be able to unmarshal into an empty struct", func() {
