@@ -207,7 +207,7 @@ func (c *Commitment) Set(other Commitment) {
 
 // SizeHint implements the surge.SizeHinter interface.
 func (c Commitment) SizeHint() int {
-	return secp256k1.PointSizeMarshalled*len(c) + surge.SizeHintU32
+	return surge.SizeHintU32 + secp256k1.PointSizeMarshalled*len(c)
 }
 
 // Marshal implements the surge.Marshaler interface.

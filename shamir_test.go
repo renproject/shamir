@@ -219,7 +219,6 @@ var _ = Describe("Shamir Secret Sharing", func() {
 	//
 
 	Context("Shares", func() {
-		trials := 1000
 		const maxN = 20
 		const maxLen = 4 + maxN*ShareSize
 		var bs [maxLen]byte
@@ -248,28 +247,10 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			return true
 		}
 
-		It("should be the same after marshalling and unmarshalling", func() {
-			for i := 0; i < trials; i++ {
-				n := RandRange(0, maxN)
-				shares1 = shares1[:n]
-				RandomiseShares(shares1)
-
-				_, m, err := shares1.Marshal(bs[:], 4+n*ShareSize)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(m).To(Equal(0))
-
-				_, m, err = shares2.Unmarshal(bs[:], 4+n*ShareSize)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(m).To(Equal(0))
-
-				Expect(SharesAreEq(shares1, shares2)).To(BeTrue())
-			}
-		})
-
 		It("should be able to unmarshal into an empty struct", func() {
 			shares1 = shares1[:maxN]
 			RandomiseShares(shares1)
-			shares2 := Shares{}
+			shares2 = Shares{}
 
 			_, _, _ = shares1.Marshal(bs[:], shares1.SizeHint())
 			_, m, err := shares2.Unmarshal(bs[:], shares1.SizeHint())

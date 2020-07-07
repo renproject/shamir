@@ -477,7 +477,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 	//
 
 	Context("VerifiableShares", func() {
-		trials := 1000
 		const maxN = 20
 		const maxLen = 4 + maxN*VShareSize
 		var bs [maxLen]byte
@@ -509,28 +508,10 @@ var _ = Describe("Verifiable secret sharing", func() {
 			return true
 		}
 
-		It("should be the same after marshalling and unmarshalling", func() {
-			for i := 0; i < trials; i++ {
-				n := RandRange(0, maxN)
-				shares1 = shares1[:n]
-				RandomiseVerifiableShares(shares1)
-
-				_, m, err := shares1.Marshal(bs[:], 4+n*VShareSize)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(m).To(Equal(0))
-
-				_, m, err = shares2.Unmarshal(bs[:], 4+n*VShareSize)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(m).To(Equal(0))
-
-				Expect(VerifiableSharesAreEq(shares1, shares2)).To(BeTrue())
-			}
-		})
-
 		It("should be able to unmarshal into an empty struct", func() {
 			shares1 = shares1[:maxN]
 			RandomiseVerifiableShares(shares1)
-			shares2 := VerifiableShares{}
+			shares2 = VerifiableShares{}
 
 			_, _, _ = shares1.Marshal(bs[:], shares1.SizeHint())
 			_, m, err := shares2.Unmarshal(bs[:], shares1.SizeHint())
