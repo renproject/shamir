@@ -5,29 +5,6 @@ import (
 	"github.com/renproject/surge"
 )
 
-// Panics: This function will panic if the elemSize is 0.
-func unmarshalSliceLen32(dst *uint32, elemSize int, buf []byte, rem int) ([]byte, int, error) {
-	var l uint32
-	buf, rem, err := surge.UnmarshalU32(&l, buf, rem)
-	if err != nil {
-		return buf, rem, err
-	}
-
-	var c uint64 = uint64(l) * uint64(elemSize)
-
-	// Check if there was overflow in the multiplication.
-	if c/uint64(elemSize) != uint64(l) {
-		return buf, rem, surge.ErrLengthOverflow
-	}
-
-	if uint64(rem) < c {
-		return buf, rem, surge.ErrUnexpectedEndOfBuffer
-	}
-
-	*dst = l
-	return buf, rem, nil
-}
-
 func marshalIndices(indices []secp256k1.Fn, buf []byte, rem int) ([]byte, int, error) {
 	buf, rem, err := surge.MarshalU32(uint32(len(indices)), buf, rem)
 	if err != nil {
@@ -46,7 +23,7 @@ func marshalIndices(indices []secp256k1.Fn, buf []byte, rem int) ([]byte, int, e
 
 func unmarshalIndices(dst *[]secp256k1.Fn, buf []byte, rem int) ([]byte, int, error) {
 	var l uint32
-	buf, rem, err := unmarshalSliceLen32(&l, secp256k1.FnSize, buf, rem)
+	buf, rem, err := surge.UnmarshalLen(&l, secp256k1.FnSize, buf, rem)
 	if err != nil {
 		return buf, rem, err
 	}

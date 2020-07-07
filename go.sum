@@ -142,6 +142,8 @@ github.com/renproject/surge v1.2.3 h1:M2NQ/NhoJgppE8WlxMqMDUJBVOgjzAOUt5tiSiw47X
 github.com/renproject/surge v1.2.3/go.mod h1:jNVsKCM3/2PAllkc2cx7g2saG9NrHRX5x20I/TDMXOs=
 github.com/renproject/surge v1.2.4 h1:TnlbFQEbcyHbdnZx/PGOaexxaNRP2/l6hSzbs5jnJw0=
 github.com/renproject/surge v1.2.4/go.mod h1:jNVsKCM3/2PAllkc2cx7g2saG9NrHRX5x20I/TDMXOs=
+github.com/renproject/surge v1.2.5 h1:P2qKZxWiKrC8hw7in/hXVtic+dGkhd1M0H/1Lj+fJnw=
+github.com/renproject/surge v1.2.5/go.mod h1:jNVsKCM3/2PAllkc2cx7g2saG9NrHRX5x20I/TDMXOs=
 github.com/rjeczalik/notify v0.9.1/go.mod h1:rKwnCoCGeuQnwBtTSPL9Dad03Vh2n40ePRrjvIXnJho=
 github.com/rs/cors v0.0.0-20160617231935-a62a804a8a00/go.mod h1:gFx+x8UowdsKA9AchylcLynDq+nNFfI8FkUZdN/jGCU=
 github.com/rs/xhandler v0.0.0-20160618193221-ed27b6fd6521/go.mod h1:RvLn4FgxWubrpZHtQLnOf6EwhN2hEMusxZOhcW9H3UQ=

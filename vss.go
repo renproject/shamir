@@ -37,7 +37,7 @@ func (vshares VerifiableShares) Marshal(buf []byte, rem int) ([]byte, int, error
 // Unmarshal implements the surge.Unmarshaler interface.
 func (vshares *VerifiableShares) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 	var l uint32
-	buf, rem, err := unmarshalSliceLen32(&l, VShareSize, buf, rem)
+	buf, rem, err := surge.UnmarshalLen(&l, VShareSize, buf, rem)
 	if err != nil {
 		return buf, rem, err
 	}
@@ -230,7 +230,7 @@ func (c Commitment) Marshal(buf []byte, rem int) ([]byte, int, error) {
 // Unmarshal implements the surge.Unmarshaler interface.
 func (c *Commitment) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 	var l uint32
-	buf, rem, err := unmarshalSliceLen32(&l, secp256k1.PointSize, buf, rem)
+	buf, rem, err := surge.UnmarshalLen(&l, secp256k1.PointSize, buf, rem)
 	if err != nil {
 		return buf, rem, err
 	}

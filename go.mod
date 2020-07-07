@@ -10,6 +10,6 @@ require (
 	github.com/onsi/gomega v1.10.1
 	github.com/renproject/secp256k1 v0.0.0-20200702062750-43cb0b3fed27
 	github.com/renproject/secp256k1-go v1.0.0
-	github.com/renproject/surge v1.2.4
+	github.com/renproject/surge v1.2.5
 	github.com/spaolacci/murmur3 v1.0.1-0.20190317074736-539464a789e9 // indirect
 )

@@ -38,7 +38,7 @@ func (shares Shares) Marshal(buf []byte, rem int) ([]byte, int, error) {
 // Unmarshal implements the surge.Unmarshaler interface.
 func (shares *Shares) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 	var l uint32
-	buf, rem, err := unmarshalSliceLen32(&l, ShareSize, buf, rem)
+	buf, rem, err := surge.UnmarshalLen(&l, ShareSize, buf, rem)
 	if err != nil {
 		return buf, rem, err
 	}
