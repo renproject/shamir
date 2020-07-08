@@ -118,6 +118,10 @@ func PerturbDecommitment(vs *shamir.VerifiableShare) {
 
 // VsharesAreConsistent is a wrapper around SharesAreConsistent for the
 // VerifiableShares type.
-func VsharesAreConsistent(vshares shamir.VerifiableShares, reconstructor *shamir.Reconstructor, k int) bool {
+func VsharesAreConsistent(
+	vshares shamir.VerifiableShares,
+	reconstructor *shamir.Reconstructor,
+	k int,
+) bool {
 	return SharesAreConsistent(vshares.Shares(), reconstructor, k)
 }
