@@ -3,30 +3,38 @@ package shamirutil
 import (
 	"math/rand"
 
-	"github.com/renproject/secp256k1-go"
+	"github.com/renproject/secp256k1"
 	"github.com/renproject/shamir"
 )
+
+// RandomCommitment constructs and returns a random commitment with the given
+// number of curve points.
+func RandomCommitment(k int) shamir.Commitment {
+	c := make(shamir.Commitment, k)
+	for i := range c {
+		c[i] = secp256k1.RandomPoint()
+	}
+	return c
+}
 
 // RandomIndices initialises and returns a slice of n indices, each of which is
 // random. Often it is desired that each index is distinct. This function does
 // not gaurantee this, however the chance of two indices being equal is
 // negligible for low n.
-func RandomIndices(n int) []secp256k1.Secp256k1N {
-	indices := make([]secp256k1.Secp256k1N, n)
+func RandomIndices(n int) []secp256k1.Fn {
+	indices := make([]secp256k1.Fn, n)
 	for i := range indices {
-		indices[i] = secp256k1.RandomSecp256k1N()
+		indices[i] = secp256k1.RandomFn()
 	}
 	return indices
 }
 
 // SequentialIndices initialises and returns a slice of n indices, where the
 // slice index i is equal to i+1 in the field.
-func SequentialIndices(n int) []secp256k1.Secp256k1N {
-	indices := make([]secp256k1.Secp256k1N, n)
-	one := secp256k1.OneSecp256k1N()
+func SequentialIndices(n int) []secp256k1.Fn {
+	indices := make([]secp256k1.Fn, n)
 	for i := range indices {
-		indices[i].Set(&one)
-		indices[i].MulInt(i + 1)
+		indices[i].SetU16(uint16(i) + 1)
 	}
 
 	return indices
@@ -80,7 +88,7 @@ func PerturbIndex(vs *shamir.VerifiableShare) {
 	share := vs.Share()
 	*vs = shamir.NewVerifiableShare(
 		shamir.NewShare(
-			secp256k1.RandomSecp256k1N(), // Altered
+			secp256k1.RandomFn(), // Altered
 			share.Value(),
 		),
 		vs.Decommitment(),
@@ -93,7 +101,7 @@ func PerturbValue(vs *shamir.VerifiableShare) {
 	*vs = shamir.NewVerifiableShare(
 		shamir.NewShare(
 			share.Index(),
-			secp256k1.RandomSecp256k1N(), // Altered
+			secp256k1.RandomFn(), // Altered
 		),
 		vs.Decommitment(),
 	)
@@ -104,12 +112,16 @@ func PerturbValue(vs *shamir.VerifiableShare) {
 func PerturbDecommitment(vs *shamir.VerifiableShare) {
 	*vs = shamir.NewVerifiableShare(
 		vs.Share(),
-		secp256k1.RandomSecp256k1N(), // Altered
+		secp256k1.RandomFn(), // Altered
 	)
 }
 
 // VsharesAreConsistent is a wrapper around SharesAreConsistent for the
 // VerifiableShares type.
-func VsharesAreConsistent(vshares shamir.VerifiableShares, reconstructor *shamir.Reconstructor, k int) bool {
+func VsharesAreConsistent(
+	vshares shamir.VerifiableShares,
+	reconstructor *shamir.Reconstructor,
+	k int,
+) bool {
 	return SharesAreConsistent(vshares.Shares(), reconstructor, k)
 }

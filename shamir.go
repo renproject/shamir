@@ -1,103 +1,77 @@
 package shamir
 
 import (
-	"encoding/binary"
 	"fmt"
-	"io"
+	"math/rand"
+	"reflect"
 
-	"github.com/renproject/secp256k1-go"
-	"github.com/renproject/shamir/util"
+	"github.com/renproject/secp256k1"
 	"github.com/renproject/surge"
 )
 
-// FnSizeBytes is the number of bytes in the secp256k1.Secp256k1N type.
-const FnSizeBytes = 32
-
-// ShareSizeBytes is the number of bytes in a share.
-const ShareSizeBytes = 64
+// ShareSize is the number of bytes in a share.
+const ShareSize = 2 * secp256k1.FnSize
 
 // Shares represents a slice of Shamir shares
 type Shares []Share
 
 // SizeHint implements the surge.SizeHinter interface.
-func (shares Shares) SizeHint() int { return 4 + ShareSizeBytes*len(shares) }
+func (shares Shares) SizeHint() int { return surge.SizeHintU32 + ShareSize*len(shares) }
 
 // Marshal implements the surge.Marshaler interface.
-func (shares Shares) Marshal(w io.Writer, m int) (int, error) {
-	if m < 4 {
-		return m, surge.ErrMaxBytesExceeded
-	}
-
-	var bs [4]byte
-
-	binary.BigEndian.PutUint32(bs[:], uint32(len(shares)))
-	n, err := w.Write(bs[:])
-	m -= n
+func (shares Shares) Marshal(buf []byte, rem int) ([]byte, int, error) {
+	buf, rem, err := surge.MarshalU32(uint32(len(shares)), buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
 	}
 
 	for i := range shares {
-		m, err = shares[i].Marshal(w, m)
+		buf, rem, err = shares[i].Marshal(buf, rem)
 		if err != nil {
-			return m, err
+			return buf, rem, err
 		}
 	}
 
-	return m, nil
+	return buf, rem, nil
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.
-func (shares *Shares) Unmarshal(r io.Reader, m int) (int, error) {
+func (shares *Shares) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 	var l uint32
-	m, err := util.UnmarshalSliceLen32(&l, ShareSizeBytes, r, m)
+	buf, rem, err := surge.UnmarshalLen(&l, ShareSize, buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
+	}
+
+	if *shares == nil {
+		*shares = make(Shares, 0, l)
 	}
 
 	*shares = (*shares)[:0]
 	for i := uint32(0); i < l; i++ {
 		*shares = append(*shares, Share{})
-		m, err = (*shares)[i].Unmarshal(r, m)
+		buf, rem, err = (*shares)[i].Unmarshal(buf, rem)
 		if err != nil {
-			return m, err
+			return buf, rem, err
 		}
 	}
 
-	return m, nil
+	return buf, rem, nil
 }
 
 // Share represents a single share in a Shamir secret sharing scheme.
 type Share struct {
-	index secp256k1.Secp256k1N
-	value secp256k1.Secp256k1N
+	index, value secp256k1.Fn
 }
 
 // NewShare constructs a new Shamir share from an index and a value.
-func NewShare(index secp256k1.Secp256k1N, value secp256k1.Secp256k1N) Share {
+func NewShare(index, value secp256k1.Fn) Share {
 	return Share{index, value}
 }
 
-// GetBytes serialises the share into bytes and writes these bytes into the
-// given destination slice. A serialises to 64 bytes.
-//
-// Panics: If the destination slice has length less than 64, this function will
-// panic.
-func (s *Share) GetBytes(dst []byte) {
-	// Byte format:
-	//
-	// - First 32 bytes: index in big endian format.
-	// - Last 32 bytes: value in big endian format.
-
-	s.index.GetB32(dst[:32])
-	s.value.GetB32(dst[32:])
-}
-
-// SetBytes sets the caller from the given bytes. The format of these bytes is
-// that determined by the GetBytes method.
-func (s *Share) SetBytes(bs []byte) {
-	s.index.SetB32(bs[:32])
-	s.value.SetB32(bs[32:])
+// Generate implements the quick.Generator interface.
+func (s Share) Generate(_ *rand.Rand, _ int) reflect.Value {
+	return reflect.ValueOf(NewShare(secp256k1.RandomFn(), secp256k1.RandomFn()))
 }
 
 // Eq returns true if the two shares are equal, and false otherwise.
@@ -106,43 +80,41 @@ func (s *Share) Eq(other *Share) bool {
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (s *Share) SizeHint() int { return s.index.SizeHint() + s.value.SizeHint() }
+func (s Share) SizeHint() int { return s.index.SizeHint() + s.value.SizeHint() }
 
 // Marshal implements the surge.Marshaler interface.
-func (s *Share) Marshal(w io.Writer, m int) (int, error) {
-	m, err := s.index.Marshal(w, m)
+func (s Share) Marshal(buf []byte, rem int) ([]byte, int, error) {
+	buf, rem, err := s.index.Marshal(buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
 	}
 
-	m, err = s.value.Marshal(w, m)
-	return m, err
+	return s.value.Marshal(buf, rem)
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.
-func (s *Share) Unmarshal(r io.Reader, m int) (int, error) {
-	m, err := s.index.Unmarshal(r, m)
+func (s *Share) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
+	buf, rem, err := s.index.Unmarshal(buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
 	}
 
-	m, err = s.value.Unmarshal(r, m)
-	return m, err
+	return s.value.Unmarshal(buf, rem)
 }
 
 // Index returns a copy of the index of the share.
-func (s *Share) Index() secp256k1.Secp256k1N {
+func (s *Share) Index() secp256k1.Fn {
 	return s.index
 }
 
 // Value returns a copy of the value of the share.
-func (s *Share) Value() secp256k1.Secp256k1N {
+func (s *Share) Value() secp256k1.Fn {
 	return s.value
 }
 
 // IndexEq returns true if the index of the two shares are equal, and false
 // otherwise.
-func (s *Share) IndexEq(other *secp256k1.Secp256k1N) bool {
+func (s *Share) IndexEq(other *secp256k1.Fn) bool {
 	return s.index.Eq(other)
 }
 
@@ -151,7 +123,7 @@ func (s *Share) IndexEq(other *secp256k1.Secp256k1N) bool {
 // unchanged.
 //
 // Panics: Addition only makes sense when the two input shares have the same
-// index. If they do not, this functino wil panic.
+// index. If they do not, this function wil panic.
 func (s *Share) Add(a, b *Share) {
 	if !a.index.Eq(&b.index) {
 		panic(fmt.Sprintf(
@@ -163,16 +135,14 @@ func (s *Share) Add(a, b *Share) {
 
 	s.index = a.index
 	s.value.Add(&a.value, &b.value)
-	s.value.Normalize()
 }
 
 // Scale multiplies the input share by a constant and then stores it in the
 // caller. This is defined as multiplying the share value by the scale, and
 // leaving the index unchanged.
-func (s *Share) Scale(other *Share, scale *secp256k1.Secp256k1N) {
+func (s *Share) Scale(other *Share, scale *secp256k1.Fn) {
 	s.index = other.index
 	s.value.Mul(&other.value, scale)
-	s.value.Normalize()
 }
 
 // A Sharer is responsible for creating Shamir sharings of secrets. A Sharer
@@ -181,74 +151,40 @@ func (s *Share) Scale(other *Share, scale *secp256k1.Secp256k1N) {
 //
 // NOTE: This struct is not safe for concurrent use.
 type Sharer struct {
-	indices []secp256k1.Secp256k1N
-	coeffs  []secp256k1.Secp256k1N
+	indices []secp256k1.Fn
+	coeffs  []secp256k1.Fn
+}
+
+// Generate implements the quick.Generator interface.
+func (sharer Sharer) Generate(rand *rand.Rand, size int) reflect.Value {
+	indices := make([]secp256k1.Fn, rand.Intn(size))
+	for i := range indices {
+		indices[i] = secp256k1.RandomFn()
+	}
+	return reflect.ValueOf(NewSharer(indices))
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (sharer *Sharer) SizeHint() int { return 4 + len(sharer.indices)*FnSizeBytes }
+func (sharer Sharer) SizeHint() int { return surge.SizeHintU32 + len(sharer.indices)*secp256k1.FnSize }
 
 // Marshal implements the surge.Marshaler interface.
-func (sharer *Sharer) Marshal(w io.Writer, m int) (int, error) {
-	return marshalFromIndices(sharer.indices, w, m)
+func (sharer Sharer) Marshal(buf []byte, rem int) ([]byte, int, error) {
+	return marshalIndices(sharer.indices, buf, rem)
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.
-func (sharer *Sharer) Unmarshal(r io.Reader, m int) (int, error) {
-	var indices []secp256k1.Secp256k1N
+func (sharer *Sharer) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
+	var indices []secp256k1.Fn
 	var err error
 
-	m, err = unmarshalToIndices(&indices, r, m)
+	buf, rem, err = unmarshalIndices(&indices, buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
 	}
 
 	*sharer = NewSharer(indices)
 
-	return m, nil
-}
-
-func marshalFromIndices(indices []secp256k1.Secp256k1N, w io.Writer, m int) (int, error) {
-	if m < 4 {
-		return m, surge.ErrMaxBytesExceeded
-	}
-
-	var bs [FnSizeBytes]byte
-
-	binary.BigEndian.PutUint32(bs[:4], uint32(len(indices)))
-	n, err := w.Write(bs[:4])
-	m -= n
-	if err != nil {
-		return m, err
-	}
-
-	for i := range indices {
-		m, err = indices[i].Marshal(w, m)
-		if err != nil {
-			return m, err
-		}
-	}
-
-	return m, nil
-}
-
-func unmarshalToIndices(dst *[]secp256k1.Secp256k1N, r io.Reader, m int) (int, error) {
-	var l uint32
-	m, err := util.UnmarshalSliceLen32(&l, FnSizeBytes, r, m)
-	if err != nil {
-		return m, err
-	}
-
-	*dst = (*dst)[:0]
-	for i := uint32(0); i < l; i++ {
-		*dst = append(*dst, secp256k1.Secp256k1N{})
-		m, err = (*dst)[i].Unmarshal(r, m)
-		if err != nil {
-			return m, err
-		}
-	}
-
-	return m, nil
+	return buf, rem, nil
 }
 
 // N returns the number of players associated with this sharer instance. This
@@ -258,10 +194,10 @@ func (sharer *Sharer) N() int {
 }
 
 // NewSharer constructs a new Sharer object from the given set of indices.
-func NewSharer(indices []secp256k1.Secp256k1N) Sharer {
-	copiedIndices := make([]secp256k1.Secp256k1N, len(indices))
+func NewSharer(indices []secp256k1.Fn) Sharer {
+	copiedIndices := make([]secp256k1.Fn, len(indices))
 	copy(copiedIndices, indices)
-	coeffs := make([]secp256k1.Secp256k1N, len(indices))
+	coeffs := make([]secp256k1.Fn, len(indices))
 	return Sharer{indices: copiedIndices, coeffs: coeffs}
 }
 
@@ -273,7 +209,7 @@ func NewSharer(indices []secp256k1.Secp256k1N) Sharer {
 //
 // Panics: This function will panic if the destination shares slice has a
 // capacity less than n (the number of indices).
-func (sharer *Sharer) Share(dst *Shares, secret secp256k1.Secp256k1N, k int) error {
+func (sharer *Sharer) Share(dst *Shares, secret secp256k1.Fn, k int) error {
 	if k > len(sharer.indices) {
 		return fmt.Errorf(
 			"reconstruction threshold too large: expected k <= %v, got k = %v",
@@ -288,7 +224,7 @@ func (sharer *Sharer) Share(dst *Shares, secret secp256k1.Secp256k1N, k int) err
 	// NOTE: This panics if the destination slice does not have the required
 	// capacity.
 	*dst = (*dst)[:len(sharer.indices)]
-	var eval secp256k1.Secp256k1N
+	var eval secp256k1.Fn
 	for i, ind := range sharer.indices {
 		polyEval(&eval, &ind, sharer.coeffs)
 		(*dst)[i].index = ind
@@ -302,14 +238,14 @@ func (sharer *Sharer) Share(dst *Shares, secret secp256k1.Secp256k1N, k int) err
 // polynomial with constant term equal to the given secret.
 //
 // Panics: This function will panic if k is greater than len(sharer.coeffs).
-func (sharer *Sharer) setRandomCoeffs(secret secp256k1.Secp256k1N, k int) {
+func (sharer *Sharer) setRandomCoeffs(secret secp256k1.Fn, k int) {
 	sharer.coeffs = sharer.coeffs[:k]
 	sharer.coeffs[0] = secret
 
 	// NOTE: If k is greater than len(sharer.coeffs), then this loop will panic
 	// when i > len(sharer.coeffs).
 	for i := 1; i < k; i++ {
-		sharer.coeffs[i] = secp256k1.RandomSecp256k1N()
+		sharer.coeffs[i] = secp256k1.RandomFn()
 	}
 }
 
@@ -321,14 +257,13 @@ func (sharer *Sharer) setRandomCoeffs(secret secp256k1.Secp256k1N, k int) {
 // Panics: This function assumes that len(coeffs) is at least 1 and not nil. If
 // it is not, it will panic. It does not make sense to call this function if
 // coeffs is the empty (or nil) slice.
-func polyEval(y, x *secp256k1.Secp256k1N, coeffs []secp256k1.Secp256k1N) {
+func polyEval(y, x *secp256k1.Fn, coeffs []secp256k1.Fn) {
 	// NOTE: This will panic if len(coeffs) is less than 1 or if coeffs is nil.
-	y.Set(&coeffs[len(coeffs)-1])
+	*y = coeffs[len(coeffs)-1]
 	for i := len(coeffs) - 2; i >= 0; i-- {
 		y.Mul(y, x)
 		y.Add(y, &coeffs[i])
 	}
-	y.Normalize()
 }
 
 // A Reconstructor is responsible for reconstructing shares into their
@@ -337,35 +272,44 @@ func polyEval(y, x *secp256k1.Secp256k1N, coeffs []secp256k1.Secp256k1N) {
 //
 // NOTE: This struct is not safe for concurrent use.
 type Reconstructor struct {
-	indices    []secp256k1.Secp256k1N
-	fullProd   []secp256k1.Secp256k1N
-	indInv     []secp256k1.Secp256k1N
+	indices    []secp256k1.Fn
+	fullProd   []secp256k1.Fn
+	indInv     []secp256k1.Fn
 	indInts    []int
 	seen       []bool
 	complement []int
 }
 
+// Generate implements the quick.Generator interface.
+func (r Reconstructor) Generate(rand *rand.Rand, size int) reflect.Value {
+	indices := make([]secp256k1.Fn, rand.Intn(size))
+	for i := range indices {
+		indices[i] = secp256k1.RandomFn()
+	}
+	return reflect.ValueOf(NewReconstructor(indices))
+}
+
 // SizeHint implements the surge.SizeHinter interface.
-func (r *Reconstructor) SizeHint() int { return 4 + len(r.indices)*FnSizeBytes }
+func (r Reconstructor) SizeHint() int { return surge.SizeHintU32 + len(r.indices)*secp256k1.FnSize }
 
 // Marshal implements the surge.Marshaler interface.
-func (r *Reconstructor) Marshal(w io.Writer, m int) (int, error) {
-	return marshalFromIndices(r.indices, w, m)
+func (r Reconstructor) Marshal(buf []byte, rem int) ([]byte, int, error) {
+	return marshalIndices(r.indices, buf, rem)
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.
-func (r *Reconstructor) Unmarshal(reader io.Reader, m int) (int, error) {
-	var indices []secp256k1.Secp256k1N
+func (r *Reconstructor) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
+	var indices []secp256k1.Fn
 	var err error
 
-	m, err = unmarshalToIndices(&indices, reader, m)
+	buf, rem, err = unmarshalIndices(&indices, buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
 	}
 
 	*r = NewReconstructor(indices)
 
-	return m, nil
+	return buf, rem, nil
 }
 
 // N returns the number of players associated with this reconstructor instance.
@@ -375,33 +319,32 @@ func (r *Reconstructor) N() int {
 }
 
 // NewReconstructor returns a new Reconstructor instance for the given indices.
-func NewReconstructor(indices []secp256k1.Secp256k1N) Reconstructor {
-	fullProd := make([]secp256k1.Secp256k1N, len(indices))
-	indInv := make([]secp256k1.Secp256k1N, len(indices))
+func NewReconstructor(indices []secp256k1.Fn) Reconstructor {
+	fullProd := make([]secp256k1.Fn, len(indices))
+	indInv := make([]secp256k1.Fn, len(indices))
 	indInts := make([]int, len(indices))
 	seen := make([]bool, len(indices))
 	complement := make([]int, len(indices))
 
 	// Precopmuted data
-	var neg, inv secp256k1.Secp256k1N
+	var neg, inv secp256k1.Fn
 	for i := range indices {
-		fullProd[i] = secp256k1.OneSecp256k1N()
-		neg.Neg(&indices[i], 1)
-		neg.Normalize()
+		fullProd[i].SetU16(1)
+		neg.Negate(&indices[i])
 		for j := range indices {
 			if i == j {
 				continue
 			}
 
 			inv.Add(&indices[j], &neg)
-			inv.Inv(&inv)
+			inv.Inverse(&inv)
 			inv.Mul(&inv, &indices[j])
 
 			fullProd[i].Mul(&fullProd[i], &inv)
 		}
 	}
 	for i, ind := range indices {
-		indInv[i].Inv(&ind)
+		indInv[i].Inverse(&ind)
 	}
 
 	return Reconstructor{indices, fullProd, indInv, indInts, seen, complement}
@@ -424,8 +367,8 @@ func NewReconstructor(indices []secp256k1.Secp256k1N) Reconstructor {
 // assumed that all of the shares given form part of a consistent sharing for
 // the given index set. Incorrect values will be returned if any of the shares
 // that are given are malicious (altered from their original value).
-func (r *Reconstructor) Open(shares Shares) (secp256k1.Secp256k1N, error) {
-	var secret secp256k1.Secp256k1N
+func (r *Reconstructor) Open(shares Shares) (secp256k1.Fn, error) {
+	var secret secp256k1.Fn
 
 	// If there are more shares than indices, then either there is a share with
 	// an index not in the index set, or two shares have the same index. In
@@ -506,19 +449,18 @@ OUTER:
 	// multiply this by  the inverse of the terms that should not be included
 	// in the product. This allows us to compute all inverses, which is the
 	// most expensive operation, in the precompute stage.
-	var term, diff secp256k1.Secp256k1N
+	var term, diff secp256k1.Fn
 	for i, share := range shares {
 		term = share.Value()
 		term.Mul(&term, &r.fullProd[r.indInts[i]])
 		for _, j := range r.complement {
-			diff.Neg(&r.indices[r.indInts[i]], 1)
+			diff.Negate(&r.indices[r.indInts[i]])
 			diff.Add(&r.indices[j], &diff)
 			term.Mul(&term, &diff)
 			term.Mul(&term, &r.indInv[j])
 		}
 		secret.Add(&secret, &term)
 	}
-	secret.Normalize()
 
 	return secret, nil
 }
@@ -526,9 +468,9 @@ OUTER:
 // CheckedOpen is a wrapper around Open that also checks if enough shares have
 // been given for reconstruction, as determined by the given threshold k. If
 // there are less than k shares given, an error is returned.
-func (r *Reconstructor) CheckedOpen(shares Shares, k int) (secp256k1.Secp256k1N, error) {
+func (r *Reconstructor) CheckedOpen(shares Shares, k int) (secp256k1.Fn, error) {
 	if len(shares) < k {
-		return secp256k1.ZeroSecp256k1N(), fmt.Errorf(
+		return secp256k1.Fn{}, fmt.Errorf(
 			"not enough shares for reconstruction: expected at least %v, got %v",
 			k, len(shares),
 		)

@@ -1,66 +1,61 @@
 package shamir
 
 import (
-	"encoding/binary"
-	"io"
+	"math/rand"
+	"reflect"
 
-	"github.com/renproject/secp256k1-go"
-	"github.com/renproject/shamir/curve"
-	"github.com/renproject/shamir/util"
+	"github.com/renproject/secp256k1"
 	"github.com/renproject/surge"
 )
 
-// VShareSizeBytes is the size of a verifiable share in bytes.
-const VShareSizeBytes = ShareSizeBytes + FnSizeBytes
+// VShareSize is the size of a verifiable share in bytes.
+const VShareSize = ShareSize + secp256k1.FnSize
 
 // VerifiableShares is a alias for a slice of VerifiableShare(s).
 type VerifiableShares []VerifiableShare
 
 // SizeHint implements the surge.SizeHinter interface.
-func (vshares VerifiableShares) SizeHint() int { return 4 + VShareSizeBytes*len(vshares) }
+func (vshares VerifiableShares) SizeHint() int { return surge.SizeHintU32 + VShareSize*len(vshares) }
 
 // Marshal implements the surge.Marshaler interface.
-func (vshares VerifiableShares) Marshal(w io.Writer, m int) (int, error) {
-	if m < 4 {
-		return m, surge.ErrMaxBytesExceeded
-	}
-
-	var bs [4]byte
-	binary.BigEndian.PutUint32(bs[:], uint32(len(vshares)))
-	n, err := w.Write(bs[:])
-	m -= n
+func (vshares VerifiableShares) Marshal(buf []byte, rem int) ([]byte, int, error) {
+	buf, rem, err := surge.MarshalU32(uint32(len(vshares)), buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
 	}
 
 	for i := range vshares {
-		m, err = vshares[i].Marshal(w, m)
+		buf, rem, err = vshares[i].Marshal(buf, rem)
 		if err != nil {
-			return m, err
+			return buf, rem, err
 		}
 	}
 
-	return m, nil
+	return buf, rem, nil
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.
-func (vshares *VerifiableShares) Unmarshal(r io.Reader, m int) (int, error) {
+func (vshares *VerifiableShares) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 	var l uint32
-	m, err := util.UnmarshalSliceLen32(&l, VShareSizeBytes, r, m)
+	buf, rem, err := surge.UnmarshalLen(&l, VShareSize, buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
+	}
+
+	if *vshares == nil {
+		*vshares = make(VerifiableShares, 0, l)
 	}
 
 	*vshares = (*vshares)[:0]
 	for i := uint32(0); i < l; i++ {
 		*vshares = append(*vshares, VerifiableShare{})
-		m, err = (*vshares)[i].Unmarshal(r, m)
+		buf, rem, err = (*vshares)[i].Unmarshal(buf, rem)
 		if err != nil {
-			return m, err
+			return buf, rem, err
 		}
 	}
 
-	return m, nil
+	return buf, rem, nil
 }
 
 // Shares returns the underlying (unverified) shares.
@@ -78,37 +73,25 @@ func (vshares VerifiableShares) Shares() Shares {
 // to be verified as correct for a given commitment to a sharing.
 type VerifiableShare struct {
 	share Share
-	r     secp256k1.Secp256k1N
+	r     secp256k1.Fn
+}
+
+// Generate implements the quick.Generator interface.
+func (vs VerifiableShare) Generate(_ *rand.Rand, _ int) reflect.Value {
+	return reflect.ValueOf(
+		NewVerifiableShare(
+			NewShare(secp256k1.RandomFn(), secp256k1.RandomFn()),
+			secp256k1.RandomFn(),
+		),
+	)
 }
 
 // NewVerifiableShare constructs a new VerifiableShare from the given Share and
 // decommitment value. This function allows the manual construction of a
 // VerifiableShare, and should be only used if such fine grained control is
 // needed. In general, shares should be constructed by using a VSSharer.
-func NewVerifiableShare(share Share, r secp256k1.Secp256k1N) VerifiableShare {
+func NewVerifiableShare(share Share, r secp256k1.Fn) VerifiableShare {
 	return VerifiableShare{share, r}
-}
-
-// GetBytes serialises the verifiable share into bytes and writes these bytes
-// into the given destination slice. A verifiable serialises to 96 bytes.
-//
-// Panics: If the destination slice has length less than 96, this function will
-// panic.
-func (vs *VerifiableShare) GetBytes(dst []byte) {
-	// Byte format:
-	//
-	// - First 64 bytes: serialised Shamir share.
-	// - Last 32 bytes: decommitment value in big endian format.
-
-	vs.share.GetBytes(dst[:ShareSizeBytes])
-	vs.r.GetB32(dst[ShareSizeBytes:])
-}
-
-// SetBytes sets the caller from the given bytes. The format of these bytes is
-// that determined by the GetBytes method.
-func (vs *VerifiableShare) SetBytes(bs []byte) {
-	vs.share.SetBytes(bs[:ShareSizeBytes])
-	vs.r.SetB32(bs[ShareSizeBytes:])
 }
 
 // Eq returns true if the two verifiable shares are equal, and false otherwise.
@@ -117,32 +100,27 @@ func (vs *VerifiableShare) Eq(other *VerifiableShare) bool {
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (vs *VerifiableShare) SizeHint() int { return vs.share.SizeHint() + vs.r.SizeHint() }
+func (vs VerifiableShare) SizeHint() int { return vs.share.SizeHint() + vs.r.SizeHint() }
 
 // Marshal implements the surge.Marshaler interface.
-func (vs *VerifiableShare) Marshal(w io.Writer, m int) (int, error) {
-	m, err := vs.share.Marshal(w, m)
+func (vs VerifiableShare) Marshal(buf []byte, rem int) ([]byte, int, error) {
+	buf, rem, err := vs.share.Marshal(buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
 	}
 
-	m, err = vs.r.Marshal(w, m)
-	return m, err
+	buf, rem, err = vs.r.Marshal(buf, rem)
+	return buf, rem, err
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.
-func (vs *VerifiableShare) Unmarshal(r io.Reader, m int) (int, error) {
-	if m < vs.SizeHint() {
-		return m, surge.ErrMaxBytesExceeded
-	}
-
-	m, err := vs.share.Unmarshal(r, m)
+func (vs *VerifiableShare) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
+	buf, rem, err := vs.share.Unmarshal(buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
 	}
 
-	m, err = vs.r.Unmarshal(r, m)
-	return m, err
+	return vs.r.Unmarshal(buf, rem)
 }
 
 // Share returns the underlying Shamir share of the verifiable share.
@@ -151,7 +129,7 @@ func (vs *VerifiableShare) Share() Share {
 }
 
 // Decommitment returns the index of the verifiable share.
-func (vs *VerifiableShare) Decommitment() secp256k1.Secp256k1N {
+func (vs *VerifiableShare) Decommitment() secp256k1.Fn {
 	return vs.r
 }
 
@@ -163,7 +141,6 @@ func (vs *VerifiableShare) Decommitment() secp256k1.Secp256k1N {
 func (vs *VerifiableShare) Add(a, b *VerifiableShare) {
 	vs.share.Add(&a.share, &b.share)
 	vs.r.Add(&a.r, &b.r)
-	vs.r.Normalize()
 }
 
 // Scale computes the scaling of the input share by given scale factor and
@@ -172,28 +149,32 @@ func (vs *VerifiableShare) Add(a, b *VerifiableShare) {
 // value also by the scaling factor. In general, the resulting share will be a
 // share with secret value equal to the scale factor multiplied by the secret
 // corresponding to the (sharing of the) input share.
-func (vs *VerifiableShare) Scale(other *VerifiableShare, scale *secp256k1.Secp256k1N) {
+func (vs *VerifiableShare) Scale(other *VerifiableShare, scale *secp256k1.Fn) {
 	vs.share.Scale(&other.share, scale)
 	vs.r.Mul(&other.r, scale)
-	vs.r.Normalize()
 }
 
 // A Commitment is used to verify that a sharing has been performed correctly.
-type Commitment struct {
-	// Curve points that represent Pedersen commitments to each of the
-	// coefficients.  Index i corresponds to coefficient c_i.
-	points []curve.Point
+type Commitment []secp256k1.Point
+
+// Generate implements the quick.Generator interface.
+func (c Commitment) Generate(rand *rand.Rand, size int) reflect.Value {
+	com := make(Commitment, rand.Intn(size))
+	for i := range com {
+		com[i] = secp256k1.RandomPoint()
+	}
+	return reflect.ValueOf(com)
 }
 
 // Eq returns true if the two commitments are equal (each curve point is
 // equal), and false otherwise.
-func (c *Commitment) Eq(other *Commitment) bool {
-	if len(c.points) != len(other.points) {
+func (c Commitment) Eq(other Commitment) bool {
+	if len(c) != len(other) {
 		return false
 	}
 
-	for i := range c.points {
-		if !c.points[i].Eq(&other.points[i]) {
+	for i := range c {
+		if !c[i].Eq(&other[i]) {
 			return false
 		}
 	}
@@ -201,127 +182,79 @@ func (c *Commitment) Eq(other *Commitment) bool {
 	return true
 }
 
+// Append a point to the commitment.
+func (c *Commitment) Append(p secp256k1.Point) {
+	*c = append(*c, p)
+}
+
 // Len returns the number of curve points in the commitment. This is equal to
 // the reconstruction threshold of the associated verifiable sharing.
-func (c *Commitment) Len() int {
-	return len(c.points)
+func (c Commitment) Len() int {
+	return len(c)
 }
 
 // Set the calling commitment to be equal to the given commitment.
 func (c *Commitment) Set(other Commitment) {
-	if len(c.points) < len(other.points) {
-		*c = NewCommitmentWithCapacity(len(other.points))
+	if len(*c) < len(other) {
+		*c = NewCommitmentWithCapacity(len(other))
 	}
 
-	c.points = c.points[:len(other.points)]
-	for i := range c.points {
-		c.points[i].Set(&other.points[i])
-	}
-}
-
-// GetPoint returns the elliptic curve point at the given index of the commitment
-func (c Commitment) GetPoint(index int) curve.Point {
-	point := curve.New()
-	point.Set(&c.points[index])
-	return point
-}
-
-// AppendPoint appends an elliptic curve point to the given commitment
-func (c *Commitment) AppendPoint(point curve.Point) {
-	p := curve.New()
-	p.Set(&point)
-	c.points = append(c.points, p)
-}
-
-// GetBytes serialises the commitment into bytes and writes these bytes into
-// the given destination slice.
-//
-// Panics: If the destination slice has length smaller than required, this
-// function may panic. The exact length requirement can be obtained from the
-// SizeHint method.
-func (c *Commitment) GetBytes(dst []byte) {
-	// Byte format:
-	//
-	// - First 4 bytes: slice length in big endian as a uint32.
-	// - Remaining bytes: successive groups of 64 bytes containing the
-	// serialised curve points.
-
-	binary.BigEndian.PutUint32(dst[:4], uint32(len(c.points)))
-	for i, p := range c.points {
-		p.GetBytes(dst[curve.PointSizeBytes*i+4:])
-	}
-}
-
-// SetBytes sets the caller from the given bytes. The format of these bytes is
-// that determined by the GetBytes method.
-func (c *Commitment) SetBytes(bs []byte) {
-	nPoints := int(binary.BigEndian.Uint32(bs[:4]))
-	c.points = c.points[:nPoints]
-	for i := 0; i < nPoints; i++ {
-		c.points[i].SetBytes(bs[curve.PointSizeBytes*i+4:])
+	*c = (*c)[:len(other)]
+	for i := range *c {
+		(*c)[i] = other[i]
 	}
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (c Commitment) SizeHint() int { return curve.PointSizeBytes*len(c.points) + 4 }
+func (c Commitment) SizeHint() int {
+	return surge.SizeHintU32 + secp256k1.PointSizeMarshalled*len(c)
+}
 
 // Marshal implements the surge.Marshaler interface.
-func (c Commitment) Marshal(w io.Writer, m int) (int, error) {
-	if m < 4 {
-		return m, surge.ErrMaxBytesExceeded
-	}
-
-	var bs [4]byte
-
-	binary.BigEndian.PutUint32(bs[:], uint32(len(c.points)))
-	n, err := w.Write(bs[:])
-	m -= n
+func (c Commitment) Marshal(buf []byte, rem int) ([]byte, int, error) {
+	buf, rem, err := surge.MarshalU32(uint32(len(c)), buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
 	}
 
-	for i := range c.points {
-		if m < c.points[i].SizeHint() {
-			return m, surge.ErrMaxBytesExceeded
-		}
-
-		m, err = c.points[i].Marshal(w, m)
+	for i := range c {
+		buf, rem, err = c[i].Marshal(buf, rem)
 		if err != nil {
-			return m, err
+			return buf, rem, err
 		}
 	}
-	return m, nil
+
+	return buf, rem, nil
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.
-func (c *Commitment) Unmarshal(r io.Reader, m int) (int, error) {
+func (c *Commitment) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 	var l uint32
-	m, err := util.UnmarshalSliceLen32(&l, curve.PointSizeBytes, r, m)
+	buf, rem, err := surge.UnmarshalLen(&l, secp256k1.PointSize, buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
 	}
 
-	c.points = c.points[:0]
+	if *c == nil {
+		*c = make([]secp256k1.Point, 0, l)
+	}
+
+	*c = (*c)[:0]
 	for i := uint32(0); i < l; i++ {
-		c.points = append(c.points, curve.New())
-		m, err = c.points[i].Unmarshal(r, m)
+		*c = append(*c, secp256k1.Point{})
+		buf, rem, err = (*c)[i].Unmarshal(buf, rem)
 		if err != nil {
-			return m, err
+			return buf, rem, err
 		}
 	}
-	return m, nil
+	return buf, rem, nil
 }
 
 // NewCommitmentWithCapacity creates a new Commitment with the given capacity.
 // This capacity represents the maximum reconstruction threshold, k, that this
 // commitment can be used for.
 func NewCommitmentWithCapacity(k int) Commitment {
-	points := make([]curve.Point, k)
-	for i := range points {
-		points[i] = curve.New()
-	}
-	points = points[:0]
-	return Commitment{points}
+	return make(Commitment, 0, k)
 }
 
 // Add takes two input commitments and stores in the caller the commitment that
@@ -335,19 +268,19 @@ func NewCommitmentWithCapacity(k int) Commitment {
 // Panics: If the destination commitment does not have capacity at least as big
 // as the greater of the capacities of the two inputs, then this function will
 // panic.
-func (c *Commitment) Add(a, b *Commitment) {
-	var smaller, larger []curve.Point
-	if len(a.points) > len(b.points) {
-		smaller, larger = b.points, a.points
+func (c *Commitment) Add(a, b Commitment) {
+	var smaller, larger []secp256k1.Point
+	if len(a) > len(b) {
+		smaller, larger = b, a
 	} else {
-		smaller, larger = a.points, b.points
+		smaller, larger = a, b
 	}
 
-	c.points = c.points[:len(larger)]
+	*c = (*c)[:len(larger)]
 	for i := range smaller {
-		c.points[i].Add(&smaller[i], &larger[i])
+		(*c)[i].Add(&smaller[i], &larger[i])
 	}
-	copy(c.points[len(smaller):], larger[len(smaller):])
+	copy((*c)[len(smaller):], larger[len(smaller):])
 }
 
 // Scale takes an input commitment and stores in the caller the commitment that
@@ -359,23 +292,19 @@ func (c *Commitment) Add(a, b *Commitment) {
 //
 // Panics: If the destination commitment does not have capacity at least as big
 // as the input commitment, then this function will panic.
-func (c *Commitment) Scale(other *Commitment, scale *secp256k1.Secp256k1N) {
-	var bs [FnSizeBytes]byte
-	scale.GetB32(bs[:])
-	c.points = c.points[:len(other.points)]
-	for i := range c.points {
-		c.points[i].Scale(&other.points[i], bs)
+func (c *Commitment) Scale(other Commitment, scale *secp256k1.Fn) {
+	*c = (*c)[:len(other)]
+	for i := range *c {
+		(*c)[i].Scale(&other[i], scale)
 	}
 }
 
 // Evaluates the sharing polynomial at the given index "in the exponent".
-func (c *Commitment) evaluate(eval *curve.Point, index *secp256k1.Secp256k1N) {
-	var bs [FnSizeBytes]byte
-	index.GetB32(bs[:])
-	eval.Set(&c.points[len(c.points)-1])
-	for i := len(c.points) - 2; i >= 0; i-- {
-		eval.Scale(eval, bs)
-		eval.Add(eval, &c.points[i])
+func (c *Commitment) evaluate(eval *secp256k1.Point, index *secp256k1.Fn) {
+	*eval = (*c)[len(*c)-1]
+	for i := len(*c) - 2; i >= 0; i-- {
+		eval.Scale(eval, index)
+		eval.Add(eval, &(*c)[i])
 	}
 }
 
@@ -387,52 +316,47 @@ func (c *Commitment) evaluate(eval *curve.Point, index *secp256k1.Secp256k1N) {
 //
 // NOTE: This struct is not safe for concurrent use.
 type VSSChecker struct {
-	h curve.Point
+	h secp256k1.Point
 
 	// Cached vairables
-	eval, gPow, hPow curve.Point
+	eval, gPow, hPow secp256k1.Point
+}
+
+// Generate implements the quick.Generator interface.
+func (checker VSSChecker) Generate(_ *rand.Rand, _ int) reflect.Value {
+	return reflect.ValueOf(NewVSSChecker(secp256k1.RandomPoint()))
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (checker *VSSChecker) SizeHint() int { return checker.h.SizeHint() }
+func (checker VSSChecker) SizeHint() int { return checker.h.SizeHint() }
 
 // Marshal implements the surge.Marshaler interface.
-func (checker *VSSChecker) Marshal(w io.Writer, m int) (int, error) {
-	var err error = nil
-	m, err = checker.h.Marshal(w, m)
-	return m, err
+func (checker VSSChecker) Marshal(buf []byte, rem int) ([]byte, int, error) {
+	return checker.h.Marshal(buf, rem)
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.
-func (checker *VSSChecker) Unmarshal(r io.Reader, m int) (int, error) {
-	var err error = nil
-	checker.h = curve.New()
-	m, err = checker.h.Unmarshal(r, m)
+func (checker *VSSChecker) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
+	buf, rem, err := checker.h.Unmarshal(buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
 	}
-	checker.eval = curve.New()
-	checker.gPow = curve.New()
-	checker.hPow = curve.New()
-	return m, nil
+	return buf, rem, nil
 }
 
 // NewVSSChecker constructs a new VSS checking instance for the given Pedersen
 // commitment scheme parameter h. The other generator g is always chosen to be
 // the canonical base point for the secp256k1 curve.
-func NewVSSChecker(h curve.Point) VSSChecker {
-	eval, gPow, hPow := curve.New(), curve.New(), curve.New()
+func NewVSSChecker(h secp256k1.Point) VSSChecker {
+	eval, gPow, hPow := secp256k1.Point{}, secp256k1.Point{}, secp256k1.Point{}
 	return VSSChecker{h, eval, gPow, hPow}
 }
 
 // IsValid returns true when the given verifiable share is valid with regard to
 // the given commitment, and false otherwise.
 func (checker *VSSChecker) IsValid(c *Commitment, vshare *VerifiableShare) bool {
-	var bs [FnSizeBytes]byte
-	vshare.share.value.GetB32(bs[:])
-	checker.gPow.BaseExp(bs)
-	vshare.r.GetB32(bs[:])
-	checker.hPow.Scale(&checker.h, bs)
+	checker.gPow.BaseExp(&vshare.share.value)
+	checker.hPow.Scale(&checker.h, &vshare.r)
 	checker.gPow.Add(&checker.gPow, &checker.hPow)
 
 	c.evaluate(&checker.eval, &vshare.share.index)
@@ -446,51 +370,54 @@ func (checker *VSSChecker) IsValid(c *Commitment, vshare *VerifiableShare) bool 
 // NOTE: This struct is not safe for concurrent use.
 type VSSharer struct {
 	sharer Sharer
-	h      curve.Point
+	h      secp256k1.Point
 
 	// Cached variables
 	shares Shares
-	hPow   curve.Point
+	hPow   secp256k1.Point
+}
+
+// Generate implements the quick.Generator interface.
+func (s VSSharer) Generate(rand *rand.Rand, size int) reflect.Value {
+	indices := make([]secp256k1.Fn, rand.Intn(size))
+	for i := range indices {
+		indices[i] = secp256k1.RandomFn()
+	}
+	return reflect.ValueOf(NewVSSharer(indices, secp256k1.RandomPoint()))
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (s *VSSharer) SizeHint() int { return s.sharer.SizeHint() + s.h.SizeHint() }
+func (s VSSharer) SizeHint() int { return s.sharer.SizeHint() + s.h.SizeHint() }
 
 // Marshal implements the surge.Marshaler interface.
-func (s *VSSharer) Marshal(w io.Writer, m int) (int, error) {
-	var err error = nil
-
-	m, err = s.sharer.Marshal(w, m)
+func (s VSSharer) Marshal(buf []byte, rem int) ([]byte, int, error) {
+	buf, rem, err := s.sharer.Marshal(buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
 	}
 
-	m, err = s.h.Marshal(w, m)
+	buf, rem, err = s.h.Marshal(buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
 	}
 
-	return m, nil
+	return buf, rem, nil
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.
-func (s *VSSharer) Unmarshal(r io.Reader, m int) (int, error) {
-	var err error = nil
-
-	m, err = s.sharer.Unmarshal(r, m)
+func (s *VSSharer) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
+	buf, rem, err := s.sharer.Unmarshal(buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
 	}
 
-	s.h = curve.New()
-	m, err = s.h.Unmarshal(r, m)
+	buf, rem, err = s.h.Unmarshal(buf, rem)
 	if err != nil {
-		return m, err
+		return buf, rem, err
 	}
 
 	s.shares = make(Shares, len(s.sharer.indices))
-	s.hPow = curve.New()
-	return m, nil
+	return buf, rem, nil
 }
 
 // N returns the number of players associated with this VSSharer instance. This
@@ -500,10 +427,10 @@ func (s *VSSharer) N() int {
 }
 
 // NewVSSharer constructs a new VSSharer from the given set of indices.
-func NewVSSharer(indices []secp256k1.Secp256k1N, h curve.Point) VSSharer {
+func NewVSSharer(indices []secp256k1.Fn, h secp256k1.Point) VSSharer {
 	sharer := NewSharer(indices)
 	shares := make(Shares, len(indices))
-	hPow := curve.New()
+	hPow := secp256k1.Point{}
 	return VSSharer{sharer, h, shares, hPow}
 }
 
@@ -515,7 +442,7 @@ func NewVSSharer(indices []secp256k1.Secp256k1N, h curve.Point) VSSharer {
 // Panics: This function will panic if the destination shares slice has a
 // capacity less than n (the number of indices), or if the destination
 // commitment has a capacity less than k.
-func (s *VSSharer) Share(vshares *VerifiableShares, c *Commitment, secret secp256k1.Secp256k1N, k int) error {
+func (s *VSSharer) Share(vshares *VerifiableShares, c *Commitment, secret secp256k1.Fn, k int) error {
 	err := s.sharer.Share(&s.shares, secret, k)
 	if err != nil {
 		return err
@@ -523,14 +450,12 @@ func (s *VSSharer) Share(vshares *VerifiableShares, c *Commitment, secret secp25
 
 	// At this point, the sharer should still have the randomly picked
 	// coefficients in its cache, which we need to use for the commitment.
-	var bs [FnSizeBytes]byte
-	c.points = c.points[:k]
+	*c = (*c)[:k]
 	for i, coeff := range s.sharer.coeffs {
-		coeff.GetB32(bs[:])
-		c.points[i].BaseExp(bs)
+		(*c)[i].BaseExp(&coeff)
 	}
 
-	s.sharer.setRandomCoeffs(secp256k1.RandomSecp256k1N(), k)
+	s.sharer.setRandomCoeffs(secp256k1.RandomFn(), k)
 	for i, ind := range s.sharer.indices {
 		(*vshares)[i].share = s.shares[i]
 		polyEval(&(*vshares)[i].r, &ind, s.sharer.coeffs)
@@ -538,9 +463,8 @@ func (s *VSSharer) Share(vshares *VerifiableShares, c *Commitment, secret secp25
 
 	// Finish the computation of the commitments
 	for i, coeff := range s.sharer.coeffs {
-		coeff.GetB32(bs[:])
-		s.hPow.Scale(&s.h, bs)
-		c.points[i].Add(&c.points[i], &s.hPow)
+		s.hPow.Scale(&s.h, &coeff)
+		(*c)[i].Add(&(*c)[i], &s.hPow)
 	}
 
 	return nil

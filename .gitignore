@@ -1,3 +1,5 @@
 **/prof/*
 **/*.test
-**/cover*
+
+# Cover and cpu profiles
+**/*.out
