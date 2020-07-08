@@ -43,7 +43,7 @@ func (vshares *VerifiableShares) Unmarshal(buf []byte, rem int) ([]byte, int, er
 	}
 
 	if *vshares == nil {
-		*vshares = make(VerifiableShares, 0)
+		*vshares = make(VerifiableShares, 0, l)
 	}
 
 	*vshares = (*vshares)[:0]
@@ -236,7 +236,7 @@ func (c *Commitment) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 	}
 
 	if *c == nil {
-		*c = make([]secp256k1.Point, 0)
+		*c = make([]secp256k1.Point, 0, l)
 	}
 
 	*c = (*c)[:0]

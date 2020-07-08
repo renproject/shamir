@@ -29,7 +29,7 @@ func unmarshalIndices(dst *[]secp256k1.Fn, buf []byte, rem int) ([]byte, int, er
 	}
 
 	if *dst == nil {
-		*dst = make([]secp256k1.Fn, 0)
+		*dst = make([]secp256k1.Fn, 0, l)
 	}
 
 	*dst = (*dst)[:0]

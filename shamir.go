@@ -44,7 +44,7 @@ func (shares *Shares) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 	}
 
 	if *shares == nil {
-		*shares = make(Shares, 0)
+		*shares = make(Shares, 0, l)
 	}
 
 	*shares = (*shares)[:0]
@@ -65,7 +65,7 @@ type Share struct {
 }
 
 // NewShare constructs a new Shamir share from an index and a value.
-func NewShare(index secp256k1.Fn, value secp256k1.Fn) Share {
+func NewShare(index, value secp256k1.Fn) Share {
 	return Share{index, value}
 }
 
