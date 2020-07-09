@@ -320,6 +320,9 @@ func (r *Reconstructor) N() int {
 
 // NewReconstructor returns a new Reconstructor instance for the given indices.
 func NewReconstructor(indices []secp256k1.Fn) Reconstructor {
+	indicesCopy := make([]secp256k1.Fn, len(indices))
+	copy(indicesCopy, indices)
+
 	fullProd := make([]secp256k1.Fn, len(indices))
 	indInv := make([]secp256k1.Fn, len(indices))
 	indInts := make([]int, len(indices))
@@ -347,7 +350,7 @@ func NewReconstructor(indices []secp256k1.Fn) Reconstructor {
 		indInv[i].Inverse(&ind)
 	}
 
-	return Reconstructor{indices, fullProd, indInv, indInts, seen, complement}
+	return Reconstructor{indicesCopy, fullProd, indInv, indInts, seen, complement}
 }
 
 // Open returns the secret corresponding to the given shares, or if there is an
