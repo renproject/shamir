@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/renproject/secp256k1"
+	"github.com/renproject/shamir/shamirutil"
 )
 
 // Poly represents a polynomial in the field defined by the elliptic curve
@@ -23,8 +24,8 @@ import (
 // modificaitons should be avoided, and rather the provided methods used.
 type Poly []secp256k1.Fn
 
-// NewPolyFromSlice constructs a polynomial from a given slice. There will be
-// no further initialisation; the coefficients of the polynomial will be
+// NewFromSlice constructs a polynomial from a given slice. There will be no
+// further initialisation; the coefficients of the polynomial will be
 // determined by whatever values are currently in the slice, and the degree of
 // the polynomial will be determined by the length of the slice. Specifically,
 // the degree will be one less than the length of the slice. The capacity of
@@ -35,15 +36,15 @@ type Poly []secp256k1.Fn
 // any way, these modifications will be reflected in the polynomial too. It is
 // therefore advised that the original slice should not be modified in any way
 // after calling this function.
-func NewPolyFromSlice(coeffs []secp256k1.Fn) Poly {
+func NewFromSlice(coeffs []secp256k1.Fn) Poly {
 	return Poly(coeffs)
 }
 
-// NewPolyWithCapacity constructs a new polynomial with the given capacity. The
+// NewWithCapacity constructs a new polynomial with the given capacity. The
 // polynomial will also be initialised to the zero polynomial.
 //
 // NOTE: This function will panic if the argument is less than 1.
-func NewPolyWithCapacity(c int) Poly {
+func NewWithCapacity(c int) Poly {
 	coeffs := make([]secp256k1.Fn, c)
 	poly := Poly(coeffs)
 
@@ -367,9 +368,9 @@ func (p *Poly) Mul(a, b Poly) {
 	// avoid clobbering values that we will need to use
 	if aliasedA {
 		for i := a.Degree() + b.Degree(); i >= 0; i-- {
-			aStart = min(a.Degree(), i)
-			bStart = max(0, i-a.Degree())
-			numTerms = min(aStart, b.Degree()-bStart)
+			aStart = shamirutil.Min(a.Degree(), i)
+			bStart = shamirutil.Max(0, i-a.Degree())
+			numTerms = shamirutil.Min(aStart, b.Degree()-bStart)
 
 			// Account for the fact that initially the memory might not be
 			// zeroed
@@ -388,9 +389,9 @@ func (p *Poly) Mul(a, b Poly) {
 		// consider this case separately
 
 		for i := a.Degree() + b.Degree(); i >= 0; i-- {
-			aStart = max(0, i-b.Degree())
-			bStart = min(b.Degree(), i)
-			numTerms = min(a.Degree()-aStart, bStart)
+			aStart = shamirutil.Max(0, i-b.Degree())
+			bStart = shamirutil.Min(b.Degree(), i)
+			numTerms = shamirutil.Min(a.Degree()-aStart, bStart)
 
 			// Account for the fact that initially the memory might not be
 			// zeroed
@@ -456,18 +457,4 @@ func Divide(a, b Poly, q, r *Poly) {
 	if len(*r) == 0 {
 		r.Zero()
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
