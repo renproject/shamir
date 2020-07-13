@@ -33,7 +33,9 @@ type Poly []secp256k1.Fn
 func NewFromSlice(coeffs []secp256k1.Fn) Poly {
 	coeffsCopy := make([]secp256k1.Fn, len(coeffs))
 	copy(coeffsCopy, coeffs)
-	return Poly(coeffsCopy)
+	poly := Poly(coeffsCopy)
+	poly.removeLeadingZeros()
+	return poly
 }
 
 // NewWithCapacity constructs a new polynomial with the given capacity. The
