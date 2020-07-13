@@ -39,7 +39,7 @@ var _ = Describe("Polynomials", func() {
 	It("should implement the Stringer interface", func() {
 		poly := NewWithCapacity(10)
 		SetRandomPolynomial(&poly, 9)
-		poly.String()
+		_ = poly.String()
 	})
 
 	Context("when constructing a polynomial from a slice", func() {
