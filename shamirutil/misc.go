@@ -4,6 +4,14 @@ import (
 	"math/rand"
 )
 
+// Min returns the maximum of the two given ints.
+func Min(a, b int) int {
+	if a >= b {
+		return b
+	}
+	return a
+}
+
 // Max returns the maximum of the two given ints.
 func Max(a, b int) int {
 	if a <= b {
