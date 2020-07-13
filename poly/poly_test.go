@@ -12,26 +12,35 @@ import (
 )
 
 var _ = Describe("Polynomials", func() {
-	var zero secp256k1.Fn
+	var zero, one secp256k1.Fn
+
 	zero.SetU16(0)
+	one.SetU16(1)
 
 	SetRandomPolynomial := func(poly *Poly, degree int) {
-		// Make all memory available to be accessed
+		// Make all memory available to be accessed.
 		*poly = (*poly)[:cap(*poly)]
 
-		// Fill entire memory with random values (see comment in setMonomial)
+		// Fill entire memory with random values, as even memory locations
+		// beyond the degree can contain non zero values in practice.
 		for i := range *poly {
 			(*poly)[i] = secp256k1.RandomFn()
 		}
 
-		// Ensure that the leading term is non-zero
+		// Ensure that the leading term is non-zero.
 		for poly.Coefficient(degree).IsZero() {
 			(*poly)[degree] = secp256k1.RandomFn()
 		}
 
-		// Set degree
+		// Set degree.
 		*poly = (*poly)[:degree+1]
 	}
+
+	It("should implement the Stringer interface", func() {
+		poly := NewWithCapacity(10)
+		SetRandomPolynomial(&poly, 9)
+		poly.String()
+	})
 
 	Context("when constructing a polynomial from a slice", func() {
 		Specify("the coefficients should correspond to the slice elements", func() {
@@ -322,6 +331,24 @@ var _ = Describe("Polynomials", func() {
 				b.ScalarMul(a, zero)
 
 				Expect(b.IsZero()).To(BeTrue())
+			}
+		})
+
+		It("should be the same when the scalar is one", func() {
+			trials := 1000
+			maxDegree := 20
+
+			var degree int
+
+			a := NewWithCapacity(maxDegree + 1)
+			b := NewWithCapacity(maxDegree + 1)
+
+			for i := 0; i < trials; i++ {
+				degree = rand.Intn(maxDegree + 1)
+				SetRandomPolynomial(&a, degree)
+				b.ScalarMul(a, one)
+
+				Expect(b.Eq(a)).To(BeTrue())
 			}
 		})
 
@@ -852,6 +879,29 @@ var _ = Describe("Polynomials", func() {
 				}
 
 				Expect(c.Eq(d)).To(BeTrue())
+			}
+		})
+
+		It("should work when either argument is the zero polynomial", func() {
+			trials := 1000
+			maxDegree := 20
+
+			var degree int
+
+			a := NewWithCapacity(maxDegree + 1)
+			b := NewWithCapacity(maxDegree + 1)
+			z := NewWithCapacity(1)
+			z.Zero()
+
+			for i := 0; i < trials; i++ {
+				degree = rand.Intn(maxDegree + 1)
+				SetRandomPolynomial(&a, degree)
+
+				b.Mul(a, z)
+				Expect(b.IsZero()).To(BeTrue())
+
+				b.Mul(z, a)
+				Expect(b.IsZero()).To(BeTrue())
 			}
 		})
 
