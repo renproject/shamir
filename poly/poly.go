@@ -119,12 +119,8 @@ func (p *Poly) Eq(other Poly) bool {
 	}
 
 	// Otherwise check each coefficient
-	var temp1, temp2 secp256k1.Fn
 	for i := range *p {
-		temp1 = *p.Coefficient(i)
-		temp2 = *other.Coefficient(i)
-
-		if !temp1.Eq(&temp2) {
+		if !p.Coefficient(i).Eq(other.Coefficient(i)) {
 			return false
 		}
 	}
@@ -358,7 +354,7 @@ func (p *Poly) Mul(a, b Poly) {
 	// allow comparison of slices other than to the nil value, so we use the
 	// following workaround wherein we compare the addresses of the first
 	// elements of the slices instead.
-	aliasedA := &(*p)[0] == &a[0]
+	aliasedA := p.Coefficient(0) == a.Coefficient(0)
 
 	p.setLenByDegree(a.Degree() + b.Degree())
 	var aStart, bStart, numTerms int
