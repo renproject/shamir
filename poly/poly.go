@@ -30,14 +30,10 @@ type Poly []secp256k1.Fn
 // the polynomial will be determined by the length of the slice. Specifically,
 // the degree will be one less than the length of the slice. The capacity of
 // the polynomial will be the capacity of the slice.
-//
-// NOTE: The underlying memory is not copied over from the input slice. This
-// means that if the original slice is used to modify the underlying memory in
-// any way, these modifications will be reflected in the polynomial too. It is
-// therefore advised that the original slice should not be modified in any way
-// after calling this function.
 func NewFromSlice(coeffs []secp256k1.Fn) Poly {
-	return Poly(coeffs)
+	coeffsCopy := make([]secp256k1.Fn, len(coeffs))
+	copy(coeffsCopy, coeffs)
+	return Poly(coeffsCopy)
 }
 
 // NewWithCapacity constructs a new polynomial with the given capacity. The
