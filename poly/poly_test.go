@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/renproject/shamir/poly"
+	"github.com/renproject/shamir/poly/polyutil"
 	"github.com/renproject/shamir/shamirutil"
 )
 
@@ -17,28 +18,9 @@ var _ = Describe("Polynomials", func() {
 	zero.SetU16(0)
 	one.SetU16(1)
 
-	SetRandomPolynomial := func(poly *Poly, degree int) {
-		// Make all memory available to be accessed.
-		*poly = (*poly)[:cap(*poly)]
-
-		// Fill entire memory with random values, as even memory locations
-		// beyond the degree can contain non zero values in practice.
-		for i := range *poly {
-			(*poly)[i] = secp256k1.RandomFn()
-		}
-
-		// Ensure that the leading term is non-zero.
-		for poly.Coefficient(degree).IsZero() {
-			(*poly)[degree] = secp256k1.RandomFn()
-		}
-
-		// Set degree.
-		*poly = (*poly)[:degree+1]
-	}
-
 	It("should implement the Stringer interface", func() {
 		poly := NewWithCapacity(10)
-		SetRandomPolynomial(&poly, 9)
+		polyutil.SetRandomPolynomial(&poly, 9)
 		_ = poly.String()
 	})
 
@@ -95,7 +77,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&poly, degree)
+				polyutil.SetRandomPolynomial(&poly, degree)
 
 				Expect(poly.Degree()).To(Equal(degree))
 
@@ -118,8 +100,8 @@ var _ = Describe("Polynomials", func() {
 			for i := 0; i < trials; i++ {
 				degreeA = rand.Intn(maxDegree + 1)
 				degreeB = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degreeA)
-				SetRandomPolynomial(&b, degreeB)
+				polyutil.SetRandomPolynomial(&a, degreeA)
+				polyutil.SetRandomPolynomial(&b, degreeB)
 
 				a.Set(b)
 
@@ -160,7 +142,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree) + 1
-				SetRandomPolynomial(&poly, degree)
+				polyutil.SetRandomPolynomial(&poly, degree)
 
 				Expect(poly.IsZero()).To(BeFalse())
 
@@ -183,7 +165,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 				b.Set(a)
 
 				Expect(a.Eq(b)).To(BeTrue())
@@ -201,12 +183,12 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 
 				// Generate a non-zero polynomial
-				SetRandomPolynomial(&b, degree)
+				polyutil.SetRandomPolynomial(&b, degree)
 				for b.IsZero() {
-					SetRandomPolynomial(&b, degree)
+					polyutil.SetRandomPolynomial(&b, degree)
 				}
 
 				// Gauranteed to be different from a since we are adding a
@@ -232,8 +214,8 @@ var _ = Describe("Polynomials", func() {
 				for degreeB == degreeA {
 					degreeB = rand.Intn(maxDegree + 1)
 				}
-				SetRandomPolynomial(&a, degreeA)
-				SetRandomPolynomial(&b, degreeB)
+				polyutil.SetRandomPolynomial(&a, degreeA)
+				polyutil.SetRandomPolynomial(&b, degreeB)
 
 				Expect(a.Eq(b)).To(BeFalse())
 			}
@@ -251,7 +233,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&poly, degree)
+				polyutil.SetRandomPolynomial(&poly, degree)
 
 				poly.Zero()
 
@@ -272,7 +254,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&poly, degree)
+				polyutil.SetRandomPolynomial(&poly, degree)
 				x = secp256k1.RandomFn()
 
 				// Manually evaluate the polynomial
@@ -305,7 +287,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 				scale = secp256k1.RandomFn()
 				b.ScalarMul(a, scale)
 
@@ -327,7 +309,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 				b.ScalarMul(a, zero)
 
 				Expect(b.IsZero()).To(BeTrue())
@@ -345,7 +327,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 				b.ScalarMul(a, one)
 
 				Expect(b.Eq(a)).To(BeTrue())
@@ -364,7 +346,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 				scale = secp256k1.RandomFn()
 				b.ScalarMul(a, scale)
 				a.ScalarMul(a, scale)
@@ -389,8 +371,8 @@ var _ = Describe("Polynomials", func() {
 			for i := 0; i < trials; i++ {
 				degreeA = rand.Intn(maxDegree + 1)
 				degreeB = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degreeA)
-				SetRandomPolynomial(&b, degreeB)
+				polyutil.SetRandomPolynomial(&a, degreeA)
+				polyutil.SetRandomPolynomial(&b, degreeB)
 				c.Add(a, b)
 
 				// Check the coefficients
@@ -423,7 +405,7 @@ var _ = Describe("Polynomials", func() {
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
 				leadingSame = rand.Intn(degree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 
 				b = b[:len(a)]
 				for i := range b {
@@ -459,8 +441,8 @@ var _ = Describe("Polynomials", func() {
 			for i := 0; i < trials; i++ {
 				degreeA = rand.Intn(maxDegree + 1)
 				degreeB = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degreeA)
-				SetRandomPolynomial(&b, degreeB)
+				polyutil.SetRandomPolynomial(&a, degreeA)
+				polyutil.SetRandomPolynomial(&b, degreeB)
 				c.Add(a, b)
 				a.Add(a, b)
 
@@ -481,8 +463,8 @@ var _ = Describe("Polynomials", func() {
 			for i := 0; i < trials; i++ {
 				degreeA = rand.Intn(maxDegree + 1)
 				degreeB = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degreeA)
-				SetRandomPolynomial(&b, degreeB)
+				polyutil.SetRandomPolynomial(&a, degreeA)
+				polyutil.SetRandomPolynomial(&b, degreeB)
 				c.Add(a, b)
 				b.Add(a, b)
 
@@ -503,7 +485,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 				b.Set(a)
 				c.Add(a, b)
 				d.Add(a, a)
@@ -524,7 +506,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 				b.Set(a)
 				c.Add(a, b)
 				a.Add(a, a)
@@ -552,8 +534,8 @@ var _ = Describe("Polynomials", func() {
 
 				degreeA = rand.Intn(maxDegree + 1)
 				degreeB = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degreeA)
-				SetRandomPolynomial(&b, degreeB)
+				polyutil.SetRandomPolynomial(&a, degreeA)
+				polyutil.SetRandomPolynomial(&b, degreeB)
 				c.AddScaled(a, b, scale)
 
 				scaleAdd.ScalarMul(b, scale)
@@ -578,8 +560,8 @@ var _ = Describe("Polynomials", func() {
 				scale = secp256k1.RandomFn()
 
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
-				SetRandomPolynomial(&b, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&b, degree)
 				c.AddScaled(a, b, scale)
 				a.AddScaled(a, b, scale)
 
@@ -602,8 +584,8 @@ var _ = Describe("Polynomials", func() {
 				scale = secp256k1.RandomFn()
 
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
-				SetRandomPolynomial(&b, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&b, degree)
 				c.AddScaled(a, b, scale)
 				b.AddScaled(a, b, scale)
 
@@ -627,7 +609,7 @@ var _ = Describe("Polynomials", func() {
 				scale = secp256k1.RandomFn()
 
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 				b.Set(a)
 				c.AddScaled(a, b, scale)
 				d.AddScaled(a, a, scale)
@@ -651,7 +633,7 @@ var _ = Describe("Polynomials", func() {
 				scale = secp256k1.RandomFn()
 
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 				b.Set(a)
 				c.AddScaled(a, b, scale)
 				a.AddScaled(a, a, scale)
@@ -676,8 +658,8 @@ var _ = Describe("Polynomials", func() {
 			for i := 0; i < trials; i++ {
 				degreeA = rand.Intn(maxDegree + 1)
 				degreeB = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degreeA)
-				SetRandomPolynomial(&b, degreeB)
+				polyutil.SetRandomPolynomial(&a, degreeA)
+				polyutil.SetRandomPolynomial(&b, degreeB)
 				c.Sub(a, b)
 
 				// Check the coefficients
@@ -711,7 +693,7 @@ var _ = Describe("Polynomials", func() {
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
 				leadingSame = rand.Intn(degree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 
 				b = b[:len(a)]
 				for i := range b {
@@ -747,8 +729,8 @@ var _ = Describe("Polynomials", func() {
 			for i := 0; i < trials; i++ {
 				degreeA = rand.Intn(maxDegree + 1)
 				degreeB = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degreeA)
-				SetRandomPolynomial(&b, degreeB)
+				polyutil.SetRandomPolynomial(&a, degreeA)
+				polyutil.SetRandomPolynomial(&b, degreeB)
 				c.Sub(a, b)
 				a.Sub(a, b)
 
@@ -769,8 +751,8 @@ var _ = Describe("Polynomials", func() {
 			for i := 0; i < trials; i++ {
 				degreeA = rand.Intn(maxDegree + 1)
 				degreeB = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degreeA)
-				SetRandomPolynomial(&b, degreeB)
+				polyutil.SetRandomPolynomial(&a, degreeA)
+				polyutil.SetRandomPolynomial(&b, degreeB)
 				c.Sub(a, b)
 				b.Sub(a, b)
 
@@ -791,7 +773,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 				b.Set(a)
 				c.Sub(a, b)
 				d.Sub(a, a)
@@ -812,7 +794,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 				b.Set(a)
 				c.Sub(a, b)
 				a.Sub(a, a)
@@ -835,7 +817,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 				b.Neg(a)
 
 				for j := 0; j <= b.Degree(); j++ {
@@ -862,8 +844,8 @@ var _ = Describe("Polynomials", func() {
 			for i := 0; i < trials; i++ {
 				degreeA = rand.Intn(maxDegree + 1)
 				degreeB = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degreeA)
-				SetRandomPolynomial(&b, degreeB)
+				polyutil.SetRandomPolynomial(&a, degreeA)
+				polyutil.SetRandomPolynomial(&b, degreeB)
 				c.Mul(a, b)
 
 				// Manually calculate the multiplication
@@ -895,7 +877,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 
 				b.Mul(a, z)
 				Expect(b.IsZero()).To(BeTrue())
@@ -918,8 +900,8 @@ var _ = Describe("Polynomials", func() {
 			for i := 0; i < trials; i++ {
 				degreeA = rand.Intn(maxDegree + 1)
 				degreeB = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degreeA)
-				SetRandomPolynomial(&b, degreeB)
+				polyutil.SetRandomPolynomial(&a, degreeA)
+				polyutil.SetRandomPolynomial(&b, degreeB)
 				c.Mul(a, b)
 				a.Mul(a, b)
 
@@ -940,8 +922,8 @@ var _ = Describe("Polynomials", func() {
 			for i := 0; i < trials; i++ {
 				degreeA = rand.Intn(maxDegree + 1)
 				degreeB = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degreeA)
-				SetRandomPolynomial(&b, degreeB)
+				polyutil.SetRandomPolynomial(&a, degreeA)
+				polyutil.SetRandomPolynomial(&b, degreeB)
 				c.Mul(a, b)
 				b.Mul(a, b)
 
@@ -962,7 +944,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 				b.Set(a)
 				c.Mul(a, b)
 				d.Mul(a, a)
@@ -983,7 +965,7 @@ var _ = Describe("Polynomials", func() {
 
 			for i := 0; i < trials; i++ {
 				degree = rand.Intn(maxDegree + 1)
-				SetRandomPolynomial(&a, degree)
+				polyutil.SetRandomPolynomial(&a, degree)
 				b.Set(a)
 				c.Mul(a, b)
 				a.Mul(a, a)
@@ -1013,8 +995,8 @@ var _ = Describe("Polynomials", func() {
 			for i := 0; i < trials; i++ {
 				degreeA = rand.Intn(maxDegree + 1)
 				degreeB = rand.Intn(degreeA + 1)
-				SetRandomPolynomial(&a, degreeA)
-				SetRandomPolynomial(&b, degreeB)
+				polyutil.SetRandomPolynomial(&a, degreeA)
+				polyutil.SetRandomPolynomial(&b, degreeB)
 				if b.IsZero() {
 					continue
 				}
@@ -1041,8 +1023,8 @@ var _ = Describe("Polynomials", func() {
 			for i := 0; i < trials; i++ {
 				degreeB = rand.Intn(maxDegree-1) + 2
 				degreeA = rand.Intn(degreeB-1) + 1
-				SetRandomPolynomial(&a, degreeA)
-				SetRandomPolynomial(&b, degreeB)
+				polyutil.SetRandomPolynomial(&a, degreeA)
+				polyutil.SetRandomPolynomial(&b, degreeB)
 				if b.IsZero() {
 					continue
 				}
