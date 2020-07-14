@@ -58,16 +58,16 @@ func NewDecoder(inds []secp256k1.Fn, k int) Decoder {
 	}
 
 	return Decoder{
-		n, k,
-		indices,
-		interpolator,
-		eea,
+		n: n, k: k,
+		indices:      indices,
+		interpolator: interpolator,
+		eea:          eea,
 
-		g0,
-		interpPoly,
-		f1, r,
-		errors,
-		errorsComputed,
+		g0:         g0,
+		interpPoly: interpPoly,
+		f1:         f1, r: r,
+		errors:         errors,
+		errorsComputed: errorsComputed,
 	}
 }
 

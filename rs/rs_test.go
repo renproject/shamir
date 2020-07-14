@@ -9,9 +9,9 @@ import (
 	. "github.com/renproject/shamir/rs"
 
 	"github.com/renproject/secp256k1"
+	"github.com/renproject/shamir/eea/eeautil"
 	"github.com/renproject/shamir/poly"
 	"github.com/renproject/shamir/poly/polyutil"
-	"github.com/renproject/shamir/rs/eeautil"
 	"github.com/renproject/shamir/shamirutil"
 )
 
