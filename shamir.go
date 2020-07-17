@@ -10,7 +10,7 @@ import (
 )
 
 // ShareSize is the number of bytes in a share.
-const ShareSize = 2 * secp256k1.FnSize
+const ShareSize = 2 * secp256k1.FnSizeMarshalled
 
 // Shares represents a slice of Shamir shares
 type Shares []Share
@@ -165,7 +165,9 @@ func (sharer Sharer) Generate(rand *rand.Rand, size int) reflect.Value {
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (sharer Sharer) SizeHint() int { return surge.SizeHintU32 + len(sharer.indices)*secp256k1.FnSize }
+func (sharer Sharer) SizeHint() int {
+	return surge.SizeHintU32 + len(sharer.indices)*secp256k1.FnSizeMarshalled
+}
 
 // Marshal implements the surge.Marshaler interface.
 func (sharer Sharer) Marshal(buf []byte, rem int) ([]byte, int, error) {
@@ -290,7 +292,9 @@ func (r Reconstructor) Generate(rand *rand.Rand, size int) reflect.Value {
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (r Reconstructor) SizeHint() int { return surge.SizeHintU32 + len(r.indices)*secp256k1.FnSize }
+func (r Reconstructor) SizeHint() int {
+	return surge.SizeHintU32 + len(r.indices)*secp256k1.FnSizeMarshalled
+}
 
 // Marshal implements the surge.Marshaler interface.
 func (r Reconstructor) Marshal(buf []byte, rem int) ([]byte, int, error) {
