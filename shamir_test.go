@@ -317,7 +317,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 		// Marshaling
 		//
 
-		var bs [4 + n*secp256k1.FnSize]byte
+		var bs [4 + n*secp256k1.FnSizeMarshalled]byte
 
 		It("should function correctly after marshalling and unmarshalling", func() {
 			trials = 10
@@ -381,7 +381,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 		var reconstructor Reconstructor
 		var k int
 		var secret secp256k1.Fn
-		var bs [4 + n*secp256k1.FnSize]byte
+		var bs [4 + n*secp256k1.FnSizeMarshalled]byte
 
 		BeforeEach(func() {
 			indices = RandomIndices(n)
@@ -508,11 +508,6 @@ var _ = Describe("Shamir Secret Sharing", func() {
 	//
 
 	Context("Constants", func() {
-		Specify("secp256k1.FnSize should have correct value", func() {
-			x := secp256k1.Fn{}
-			Expect(secp256k1.FnSize).To(Equal(x.SizeHint()))
-		})
-
 		Specify("ShareSize should have correct value", func() {
 			share := Share{}
 			Expect(ShareSize).To(Equal(share.SizeHint()))

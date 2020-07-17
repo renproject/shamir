@@ -9,7 +9,7 @@ import (
 )
 
 // VShareSize is the size of a verifiable share in bytes.
-const VShareSize = ShareSize + secp256k1.FnSize
+const VShareSize = ShareSize + secp256k1.FnSizeMarshalled
 
 // VerifiableShares is a alias for a slice of VerifiableShare(s).
 type VerifiableShares []VerifiableShare
