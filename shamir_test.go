@@ -154,7 +154,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 		var share, share1, share2, shareSum, shareScale Share
 
 		Specify("adding should add the values and leave the index unchanged", func() {
-			var index, value1, value2, val, ind, sum secp256k1.Fn
+			var index, value1, value2, sum secp256k1.Fn
 
 			for i := 0; i < trials; i++ {
 				index = secp256k1.RandomFn()
@@ -167,10 +167,8 @@ var _ = Describe("Shamir Secret Sharing", func() {
 				share1 = NewShare(index, value1)
 				share2 = NewShare(index, value2)
 				shareSum.Add(&share1, &share2)
-				val = shareSum.Value()
-				ind = shareSum.Index()
-				Expect(val.Eq(&sum)).To(BeTrue())
-				Expect(ind.Eq(&index)).To(BeTrue())
+				Expect(shareSum.Value.Eq(&sum)).To(BeTrue())
+				Expect(shareSum.Index.Eq(&index)).To(BeTrue())
 
 				// Adding two shares with different indices should panic.
 				share1 = NewShare(secp256k1.RandomFn(), value1)
@@ -179,7 +177,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 		})
 
 		Specify("scaling should multiply the value and leave the index unchanged", func() {
-			var scale, value, index, val, ind, prod secp256k1.Fn
+			var scale, value, index, prod secp256k1.Fn
 
 			for i := 0; i < trials; i++ {
 				index = secp256k1.RandomFn()
@@ -191,10 +189,8 @@ var _ = Describe("Shamir Secret Sharing", func() {
 				// same index.
 				share = NewShare(index, value)
 				shareScale.Scale(&share, &scale)
-				val = shareScale.Value()
-				ind = shareScale.Index()
-				Expect(val.Eq(&prod)).To(BeTrue())
-				Expect(ind.Eq(&index)).To(BeTrue())
+				Expect(shareScale.Value.Eq(&prod)).To(BeTrue())
+				Expect(shareScale.Index.Eq(&index)).To(BeTrue())
 			}
 		})
 
