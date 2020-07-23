@@ -135,90 +135,43 @@ func (s *Share) Scale(other *Share, scale *secp256k1.Fn) {
 	s.Value.Mul(&other.Value, scale)
 }
 
-// A Sharer is responsible for creating Shamir sharings of secrets. A Sharer
-// instance is bound to a specific set of indices; it can only create sharings
-// of a secret for the set of players defined by these indices.
-//
-// NOTE: This struct is not safe for concurrent use.
-type Sharer struct {
-	indices []secp256k1.Fn
-	coeffs  []secp256k1.Fn
-}
-
-// Generate implements the quick.Generator interface.
-func (sharer Sharer) Generate(rand *rand.Rand, size int) reflect.Value {
-	indices := make([]secp256k1.Fn, rand.Intn(size))
-	for i := range indices {
-		indices[i] = secp256k1.RandomFn()
-	}
-	return reflect.ValueOf(NewSharer(indices))
-}
-
-// SizeHint implements the surge.SizeHinter interface.
-func (sharer Sharer) SizeHint() int {
-	return surge.SizeHintU32 + len(sharer.indices)*secp256k1.FnSizeMarshalled
-}
-
-// Marshal implements the surge.Marshaler interface.
-func (sharer Sharer) Marshal(buf []byte, rem int) ([]byte, int, error) {
-	return marshalIndices(sharer.indices, buf, rem)
-}
-
-// Unmarshal implements the surge.Unmarshaler interface.
-func (sharer *Sharer) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
-	var indices []secp256k1.Fn
-	var err error
-
-	buf, rem, err = unmarshalIndices(&indices, buf, rem)
-	if err != nil {
-		return buf, rem, err
-	}
-
-	*sharer = NewSharer(indices)
-
-	return buf, rem, nil
-}
-
-// N returns the number of players associated with this sharer instance. This
-// is equal to the the number of indices it was constructed with.
-func (sharer *Sharer) N() int {
-	return len(sharer.indices)
-}
-
-// NewSharer constructs a new Sharer object from the given set of indices.
-func NewSharer(indices []secp256k1.Fn) Sharer {
-	copiedIndices := make([]secp256k1.Fn, len(indices))
-	copy(copiedIndices, indices)
-	coeffs := make([]secp256k1.Fn, len(indices))
-	return Sharer{indices: copiedIndices, coeffs: coeffs}
-}
-
-// Share creates Shamir shares for the given secret at the given threshold, and
-// stores them in the given destination slice. In the returned Shares, there
-// will be one share for each index in the indices that were used to construct
-// the Sharer. If k is larger than the number of indices, in which case it
-// would be impossible to reconstruct the secret, an error is returned.
+// ShareSecret creates Shamir shares for the given secret at the given
+// threshold, and stores them in the given destination slice. In the returned
+// Shares, there will be one share for each index in the indices that were used
+// to construct the Sharer. If k is larger than the number of indices, in which
+// case it would be impossible to reconstruct the secret, an error is returned.
 //
 // Panics: This function will panic if the destination shares slice has a
 // capacity less than n (the number of indices).
-func (sharer *Sharer) Share(dst *Shares, secret secp256k1.Fn, k int) error {
-	if k > len(sharer.indices) {
+func ShareSecret(dst *Shares, indices []secp256k1.Fn, secret secp256k1.Fn, k int) error {
+	coeffs := make([]secp256k1.Fn, k)
+	return ShareAndGetCoeffs(dst, coeffs, indices, secret, k)
+}
+
+// ShareAndGetCoeffs is the same as ShareSecret, but uses the provided slice to
+// store the generated coefficients of the sharing polynomial. If this function
+// successfully returns, this slice will contain the coefficients of the
+// sharing polynomial, where index 0 is the constant term.
+//
+// Panics: This function will panic if the destination shares slice has a
+// capacity less than n (the number of indices) or the coefficients slice has
+// length less than k.
+func ShareAndGetCoeffs(dst *Shares, coeffs, indices []secp256k1.Fn, secret secp256k1.Fn, k int) error {
+	if k > len(indices) {
 		return fmt.Errorf(
 			"reconstruction threshold too large: expected k <= %v, got k = %v",
-			len(sharer.indices), k,
+			len(indices), k,
 		)
 	}
-
-	// Set coefficients
-	sharer.setRandomCoeffs(secret, k)
+	setRandomCoeffs(coeffs, secret, k)
 
 	// Set shares
 	// NOTE: This panics if the destination slice does not have the required
 	// capacity.
-	*dst = (*dst)[:len(sharer.indices)]
+	*dst = (*dst)[:len(indices)]
 	var eval secp256k1.Fn
-	for i, ind := range sharer.indices {
-		polyEval(&eval, &ind, sharer.coeffs)
+	for i, ind := range indices {
+		polyEval(&eval, &ind, coeffs)
 		(*dst)[i].Index = ind
 		(*dst)[i].Value = eval
 	}
@@ -229,15 +182,14 @@ func (sharer *Sharer) Share(dst *Shares, secret secp256k1.Fn, k int) error {
 // Sets the coefficients of the Sharer to represent a random degree k-1
 // polynomial with constant term equal to the given secret.
 //
-// Panics: This function will panic if k is greater than len(sharer.coeffs).
-func (sharer *Sharer) setRandomCoeffs(secret secp256k1.Fn, k int) {
-	sharer.coeffs = sharer.coeffs[:k]
-	sharer.coeffs[0] = secret
+// Panics: This function will panic if k is greater than len(coeffs).
+func setRandomCoeffs(coeffs []secp256k1.Fn, secret secp256k1.Fn, k int) {
+	coeffs = coeffs[:k]
+	coeffs[0] = secret
 
-	// NOTE: If k is greater than len(sharer.coeffs), then this loop will panic
-	// when i > len(sharer.coeffs).
+	// NOTE: If k > len(coeffs), then this will panic when i > len(coeffs).
 	for i := 1; i < k; i++ {
-		sharer.coeffs[i] = secp256k1.RandomFn()
+		coeffs[i] = secp256k1.RandomFn()
 	}
 }
 

@@ -3,3 +3,6 @@
 
 # Cover and cpu profiles
 **/*.out
+
+# Benchmarks
+**/*.bench
