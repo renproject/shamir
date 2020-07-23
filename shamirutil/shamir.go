@@ -80,28 +80,6 @@ func SharesAreConsistent(shares shamir.Shares, k int) bool {
 	return true
 }
 
-// SharesAreConsistentPrecompute returns true if the given shares are found to
-// be consistent. Consistency is defined as all points lying on some polynomial
-// of degree less than `k`.
-func SharesAreConsistentPrecompute(shares shamir.Shares, reconstructor *shamir.Reconstructor, k int) bool {
-	if len(shares) < k {
-		return true
-	}
-
-	secret, err := reconstructor.Open(shares[:k])
-	if err != nil {
-		return false
-	}
-	for i := 1; i <= len(shares)-k; i++ {
-		recon, err := reconstructor.Open(shares[i : i+k])
-		if err != nil || !recon.Eq(&secret) {
-			return false
-		}
-	}
-
-	return true
-}
-
 // PerturbIndex modifies the given verifiable share to have a random index.
 func PerturbIndex(vs *shamir.VerifiableShare) {
 	vs.Share.Index = secp256k1.RandomFn()
@@ -122,8 +100,7 @@ func PerturbDecommitment(vs *shamir.VerifiableShare) {
 // VerifiableShares type.
 func VsharesAreConsistent(
 	vshares shamir.VerifiableShares,
-	reconstructor *shamir.Reconstructor,
 	k int,
 ) bool {
-	return SharesAreConsistentPrecompute(vshares.Shares(), reconstructor, k)
+	return SharesAreConsistent(vshares.Shares(), k)
 }
