@@ -298,59 +298,16 @@ func (c *Commitment) evaluate(eval *secp256k1.Point, index *secp256k1.Fn) {
 	}
 }
 
-// A VSSChecker is capable of checking that a given share is valid for a given
-// commitment to a sharing. Each instance of this type corresponds to a
-// different group element h for the Pedersen commitment scheme, and as such
-// can by used for any verifiable sharings using this pedersen commitment
-// scheme, but cannot be used for different choices of h once constructed.
-//
-// NOTE: This struct is not safe for concurrent use.
-type VSSChecker struct {
-	h secp256k1.Point
-
-	// Cached vairables
-	eval, gPow, hPow secp256k1.Point
-}
-
-// Generate implements the quick.Generator interface.
-func (checker VSSChecker) Generate(_ *rand.Rand, _ int) reflect.Value {
-	return reflect.ValueOf(NewVSSChecker(secp256k1.RandomPoint()))
-}
-
-// SizeHint implements the surge.SizeHinter interface.
-func (checker VSSChecker) SizeHint() int { return checker.h.SizeHint() }
-
-// Marshal implements the surge.Marshaler interface.
-func (checker VSSChecker) Marshal(buf []byte, rem int) ([]byte, int, error) {
-	return checker.h.Marshal(buf, rem)
-}
-
-// Unmarshal implements the surge.Unmarshaler interface.
-func (checker *VSSChecker) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
-	buf, rem, err := checker.h.Unmarshal(buf, rem)
-	if err != nil {
-		return buf, rem, err
-	}
-	return buf, rem, nil
-}
-
-// NewVSSChecker constructs a new VSS checking instance for the given Pedersen
-// commitment scheme parameter h. The other generator g is always chosen to be
-// the canonical base point for the secp256k1 curve.
-func NewVSSChecker(h secp256k1.Point) VSSChecker {
-	eval, gPow, hPow := secp256k1.Point{}, secp256k1.Point{}, secp256k1.Point{}
-	return VSSChecker{h, eval, gPow, hPow}
-}
-
 // IsValid returns true when the given verifiable share is valid with regard to
 // the given commitment, and false otherwise.
-func (checker *VSSChecker) IsValid(c *Commitment, vshare *VerifiableShare) bool {
-	checker.gPow.BaseExp(&vshare.Share.Value)
-	checker.hPow.Scale(&checker.h, &vshare.Decommitment)
-	checker.gPow.Add(&checker.gPow, &checker.hPow)
+func IsValid(h secp256k1.Point, c *Commitment, vshare *VerifiableShare) bool {
+	var gPow, hPow, eval secp256k1.Point
+	gPow.BaseExp(&vshare.Share.Value)
+	hPow.Scale(&h, &vshare.Decommitment)
+	gPow.Add(&gPow, &hPow)
 
-	c.evaluate(&checker.eval, &vshare.Share.Index)
-	return checker.gPow.Eq(&checker.eval)
+	c.evaluate(&eval, &vshare.Share.Index)
+	return gPow.Eq(&eval)
 }
 
 // A VSSharer is capable of creating a verifiable sharing of a secret, which is

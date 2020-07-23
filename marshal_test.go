@@ -21,7 +21,6 @@ var _ = Describe("Surge marshalling", func() {
 		reflect.TypeOf(Commitment{}),
 		reflect.TypeOf(VerifiableShare{}),
 		reflect.TypeOf(VerifiableShares{}),
-		reflect.TypeOf(VSSChecker{}),
 		reflect.TypeOf(VSSharer{}),
 	}
 

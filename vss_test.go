@@ -64,7 +64,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 		vshares := make(VerifiableShares, n)
 		c := NewCommitmentWithCapacity(n)
 		vssharer := NewVSSharer(indices, h)
-		checker := NewVSSChecker(h)
 
 		Specify("all shares constructed from the VSS scheme should be valid", func() {
 			for i := 0; i < trials; i++ {
@@ -76,7 +75,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 				// Check that all shares are valid.
 				for _, share := range vshares {
-					Expect(checker.IsValid(&c, &share)).To(BeTrue())
+					Expect(IsValid(h, &c, &share)).To(BeTrue())
 				}
 			}
 		})
@@ -98,7 +97,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 		var vshares VerifiableShares
 		var c Commitment
 		var vssharer VSSharer
-		var checker VSSChecker
 		var secret secp256k1.Fn
 
 		BeforeEach(func() {
@@ -106,7 +104,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 			vshares = make(VerifiableShares, n)
 			c = NewCommitmentWithCapacity(n)
 			vssharer = NewVSSharer(indices, h)
-			checker = NewVSSChecker(h)
 		})
 
 		ShareAndCheckWithPerturbed := func(kLower int, perturbShare func(vs *VerifiableShare)) {
@@ -121,7 +118,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 				perturbShare(&vshares[badInd])
 
 				for i, share := range vshares {
-					Expect(checker.IsValid(&c, &share)).To(Equal(i != badInd))
+					Expect(IsValid(h, &c, &share)).To(Equal(i != badInd))
 				}
 			}
 		}
@@ -164,7 +161,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 		var vshares1, vshares2, vsharesSummed VerifiableShares
 		var c1, c2, cSummed Commitment
 		var vssharer VSSharer
-		var checker VSSChecker
 		var secret1, secret2, secretSummed secp256k1.Fn
 
 		BeforeEach(func() {
@@ -176,7 +172,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 			c2 = NewCommitmentWithCapacity(n)
 			cSummed = NewCommitmentWithCapacity(n)
 			vssharer = NewVSSharer(indices, h)
-			checker = NewVSSChecker(h)
 		})
 
 		CreateShares := func(kLower int) {
@@ -202,7 +197,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 			// The shares should be valid
 			for i, share := range vsharesSummed {
-				Expect(checker.IsValid(&cSummed, &share)).To(Equal(i != badInd))
+				Expect(IsValid(h, &cSummed, &share)).To(Equal(i != badInd))
 			}
 		}
 
@@ -212,7 +207,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 				// The shares should be valid
 				for _, share := range vsharesSummed {
-					Expect(checker.IsValid(&cSummed, &share)).To(BeTrue())
+					Expect(IsValid(h, &cSummed, &share)).To(BeTrue())
 				}
 			}
 		})
@@ -283,7 +278,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 		var vshares, vsharesScaled VerifiableShares
 		var c, cScaled Commitment
 		var vssharer VSSharer
-		var checker VSSChecker
 		var secret, scale, secretScaled secp256k1.Fn
 
 		BeforeEach(func() {
@@ -293,7 +287,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 			c = NewCommitmentWithCapacity(n)
 			cScaled = NewCommitmentWithCapacity(n)
 			vssharer = NewVSSharer(indices, h)
-			checker = NewVSSChecker(h)
 		})
 
 		CreateShares := func(kLower int) {
@@ -316,7 +309,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 			// The shares should be valid
 			for i, share := range vsharesScaled {
-				Expect(checker.IsValid(&cScaled, &share)).To(Equal(i != badInd))
+				Expect(IsValid(h, &cScaled, &share)).To(Equal(i != badInd))
 			}
 		}
 
@@ -326,7 +319,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 				// The shares should be valid
 				for _, share := range vsharesScaled {
-					Expect(checker.IsValid(&cScaled, &share)).To(BeTrue())
+					Expect(IsValid(h, &cScaled, &share)).To(BeTrue())
 				}
 			}
 		})
@@ -532,7 +525,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 		vshares := make(VerifiableShares, n)
 		c := NewCommitmentWithCapacity(n)
 		vssharer := NewVSSharer(indices, h)
-		checker := NewVSSChecker(h)
 
 		It("should work correctly after marshalling and unmarshalling", func() {
 			for i := 0; i < trials; i++ {
@@ -551,7 +543,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 
 				// Check that all shares are valid.
 				for _, share := range vshares {
-					Expect(checker.IsValid(&c, &share)).To(BeTrue())
+					Expect(IsValid(h, &c, &share)).To(BeTrue())
 				}
 			}
 		})
@@ -599,14 +591,13 @@ func BenchmarkVSSVerify(b *testing.B) {
 	vshares := make(VerifiableShares, n)
 	c := NewCommitmentWithCapacity(n)
 	vssharer := NewVSSharer(indices, h)
-	checker := NewVSSChecker(h)
 	secret := secp256k1.RandomFn()
 	_ = vssharer.Share(&vshares, &c, secret, k)
-	ind := rand.Intn(100)
+	ind := rand.Intn(n)
 	share := vshares[ind]
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		checker.IsValid(&c, &share)
+		IsValid(h, &c, &share)
 	}
 }
