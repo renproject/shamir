@@ -42,7 +42,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 		var k int
 		var secret secp256k1.Fn
 
-		Specify("any qualified subset can reconstruct the secret correctly", func() {
+		Specify("any qualified subset can reconstruct the secret correctly (reconstructor)", func() {
 			indices := RandomIndices(n)
 			shares := make(Shares, n)
 			reconstructor := NewReconstructor(indices)
@@ -58,7 +58,25 @@ var _ = Describe("Shamir Secret Sharing", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(recon.Eq(&secret)).To(BeTrue())
 
-				Expect(SharesAreConsistent(shares, &reconstructor, k)).To(BeTrue())
+				Expect(SharesAreConsistentPrecompute(shares, &reconstructor, k)).To(BeTrue())
+			}
+		})
+
+		Specify("any qualified subset can reconstruct the secret correctly", func() {
+			indices := RandomIndices(n)
+			shares := make(Shares, n)
+
+			for i := 0; i < trials; i++ {
+				k = RandRange(1, n)
+				secret = secp256k1.RandomFn()
+
+				err := ShareSecret(&shares, indices, secret, k)
+				Expect(err).ToNot(HaveOccurred())
+
+				recon := Open(shares)
+				Expect(recon.Eq(&secret)).To(BeTrue())
+
+				Expect(SharesAreConsistent(shares, k)).To(BeTrue())
 			}
 		})
 	})
@@ -97,7 +115,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(recon.Eq(&secretSummed)).To(BeTrue())
 
-				Expect(SharesAreConsistent(sharesSummed, &reconstructor, kmax)).To(BeTrue())
+				Expect(SharesAreConsistentPrecompute(sharesSummed, &reconstructor, kmax)).To(BeTrue())
 			}
 		})
 	})
@@ -134,7 +152,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(recon.Eq(&secretScaled)).To(BeTrue())
 
-					Expect(SharesAreConsistent(sharesScaled, &reconstructor, k)).To(BeTrue())
+					Expect(SharesAreConsistentPrecompute(sharesScaled, &reconstructor, k)).To(BeTrue())
 				}
 			},
 		)
@@ -424,7 +442,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(recon.Eq(&secret)).To(BeTrue())
 
-				Expect(SharesAreConsistent(shares, &reconstructor, k)).To(BeTrue())
+				Expect(SharesAreConsistentPrecompute(shares, &reconstructor, k)).To(BeTrue())
 			}
 		})
 
@@ -466,6 +484,22 @@ func BenchmarkShare(b *testing.B) {
 }
 
 func BenchmarkOpen(b *testing.B) {
+	n := 100
+	k := 33
+
+	indices := RandomIndices(n)
+	shares := make(Shares, n)
+	secret := secp256k1.RandomFn()
+	_ = ShareSecret(&shares, indices, secret, k)
+	Shuffle(shares)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = Open(shares[:k])
+	}
+}
+
+func BenchmarkOpenPrecompute(b *testing.B) {
 	n := 100
 	k := 33
 

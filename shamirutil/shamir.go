@@ -64,7 +64,26 @@ func AddDuplicateIndex(shares shamir.Shares) {
 // SharesAreConsistent returns true if the given shares are found to be
 // consistent. Consistency is defined as all points lying on some polynomial of
 // degree less than `k`.
-func SharesAreConsistent(shares shamir.Shares, reconstructor *shamir.Reconstructor, k int) bool {
+func SharesAreConsistent(shares shamir.Shares, k int) bool {
+	if len(shares) < k {
+		return true
+	}
+
+	secret := shamir.Open(shares[:k])
+	for i := 1; i <= len(shares)-k; i++ {
+		recon := shamir.Open(shares[i : i+k])
+		if !recon.Eq(&secret) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// SharesAreConsistentPrecompute returns true if the given shares are found to
+// be consistent. Consistency is defined as all points lying on some polynomial
+// of degree less than `k`.
+func SharesAreConsistentPrecompute(shares shamir.Shares, reconstructor *shamir.Reconstructor, k int) bool {
 	if len(shares) < k {
 		return true
 	}
@@ -106,5 +125,5 @@ func VsharesAreConsistent(
 	reconstructor *shamir.Reconstructor,
 	k int,
 ) bool {
-	return SharesAreConsistent(vshares.Shares(), reconstructor, k)
+	return SharesAreConsistentPrecompute(vshares.Shares(), reconstructor, k)
 }

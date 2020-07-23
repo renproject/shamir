@@ -426,3 +426,34 @@ func (r *Reconstructor) CheckedOpen(shares Shares, k int) (secp256k1.Fn, error) 
 	}
 	return r.Open(shares)
 }
+
+// Open computes the secret corresponding to the given shares. This is
+// equivalent to interpolating the polynomial that passes through the given
+// points, and returning the constant term. It is assumed that all shares have
+// different indices. Further properties that need to be hold if this function
+// is to correctly reconstruct the secret for a sharing with threshoold k are:
+//	- There are at least k shares.
+//	- All shares are valid, in the sense that they have not been maliciously
+//		modified.
+func Open(shares Shares) secp256k1.Fn {
+	var num, denom, res, tmp secp256k1.Fn
+	res.SetU16(0)
+	for i := range shares {
+		num.SetU16(1)
+		denom.SetU16(1)
+		for j := range shares {
+			if shares[i].Index.Eq(&shares[j].Index) {
+				continue
+			}
+			tmp.Negate(&shares[i].Index)
+			tmp.Add(&tmp, &shares[j].Index)
+			denom.Mul(&denom, &tmp)
+			num.Mul(&num, &shares[j].Index)
+		}
+		denom.Inverse(&denom)
+		tmp.Mul(&num, &denom)
+		tmp.Mul(&tmp, &shares[i].Value)
+		res.Add(&res, &tmp)
+	}
+	return res
+}
