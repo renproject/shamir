@@ -210,219 +210,33 @@ func polyEval(y, x *secp256k1.Fn, coeffs []secp256k1.Fn) {
 	}
 }
 
-// A Reconstructor is responsible for reconstructing shares into their
-// corresponding secret. Each instance can only perform reconstructions for a
-// given fixed set of indices.
-//
-// NOTE: This struct is not safe for concurrent use.
-type Reconstructor struct {
-	indices    []secp256k1.Fn
-	fullProd   []secp256k1.Fn
-	indInv     []secp256k1.Fn
-	indInts    []int
-	seen       []bool
-	complement []int
-}
-
-// Generate implements the quick.Generator interface.
-func (r Reconstructor) Generate(rand *rand.Rand, size int) reflect.Value {
-	indices := make([]secp256k1.Fn, rand.Intn(size))
-	for i := range indices {
-		indices[i] = secp256k1.RandomFn()
-	}
-	return reflect.ValueOf(NewReconstructor(indices))
-}
-
-// SizeHint implements the surge.SizeHinter interface.
-func (r Reconstructor) SizeHint() int {
-	return surge.SizeHintU32 + len(r.indices)*secp256k1.FnSizeMarshalled
-}
-
-// Marshal implements the surge.Marshaler interface.
-func (r Reconstructor) Marshal(buf []byte, rem int) ([]byte, int, error) {
-	return marshalIndices(r.indices, buf, rem)
-}
-
-// Unmarshal implements the surge.Unmarshaler interface.
-func (r *Reconstructor) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
-	var indices []secp256k1.Fn
-	var err error
-
-	buf, rem, err = unmarshalIndices(&indices, buf, rem)
-	if err != nil {
-		return buf, rem, err
-	}
-
-	*r = NewReconstructor(indices)
-
-	return buf, rem, nil
-}
-
-// N returns the number of players associated with this reconstructor instance.
-// This is equal to the number of indices it was constructed with.
-func (r *Reconstructor) N() int {
-	return len(r.indices)
-}
-
-// NewReconstructor returns a new Reconstructor instance for the given indices.
-func NewReconstructor(indices []secp256k1.Fn) Reconstructor {
-	indicesCopy := make([]secp256k1.Fn, len(indices))
-	copy(indicesCopy, indices)
-
-	fullProd := make([]secp256k1.Fn, len(indices))
-	indInv := make([]secp256k1.Fn, len(indices))
-	indInts := make([]int, len(indices))
-	seen := make([]bool, len(indices))
-	complement := make([]int, len(indices))
-
-	// Precopmuted data
-	var neg, inv secp256k1.Fn
-	for i := range indices {
-		fullProd[i].SetU16(1)
-		neg.Negate(&indices[i])
-		for j := range indices {
-			if i == j {
+// Open computes the secret corresponding to the given shares. This is
+// equivalent to interpolating the polynomial that passes through the given
+// points, and returning the constant term. It is assumed that all shares have
+// different indices. Further properties that need to be hold if this function
+// is to correctly reconstruct the secret for a sharing with threshoold k are:
+//	- There are at least k shares.
+//	- All shares are valid, in the sense that they have not been maliciously
+//		modified.
+func Open(shares Shares) secp256k1.Fn {
+	var num, denom, res, tmp secp256k1.Fn
+	res.SetU16(0)
+	for i := range shares {
+		num.SetU16(1)
+		denom.SetU16(1)
+		for j := range shares {
+			if shares[i].Index.Eq(&shares[j].Index) {
 				continue
 			}
-
-			inv.Add(&indices[j], &neg)
-			inv.Inverse(&inv)
-			inv.Mul(&inv, &indices[j])
-
-			fullProd[i].Mul(&fullProd[i], &inv)
+			tmp.Negate(&shares[i].Index)
+			tmp.Add(&tmp, &shares[j].Index)
+			denom.Mul(&denom, &tmp)
+			num.Mul(&num, &shares[j].Index)
 		}
+		denom.Inverse(&denom)
+		tmp.Mul(&num, &denom)
+		tmp.Mul(&tmp, &shares[i].Value)
+		res.Add(&res, &tmp)
 	}
-	for i, ind := range indices {
-		indInv[i].Inverse(&ind)
-	}
-
-	return Reconstructor{indicesCopy, fullProd, indInv, indInts, seen, complement}
-}
-
-// Open returns the secret corresponding to the given shares, or if there is an
-// error, instead it will return the zero value and the relevant error. An
-// error will be returned if the given shares do not have valid indices as per
-// the index set that the Reconstructor was constructed with. Specifically, if
-// any of the given shares have an index that is not in the Reconstructor's
-// index set, an error will be returned. Additionally, an error will also be
-// returned if any two of the shares have the same index.
-//
-// NOTE: This function does not have any knowledge of the reconstruction
-// threshold k. This means that if this function is invoked with k' < k shares
-// for some k-sharing, then no error will be returned but the return value will
-// be incorrect.
-//
-// NOTE: This function does not implement any fault tolerance. That is, it is
-// assumed that all of the shares given form part of a consistent sharing for
-// the given index set. Incorrect values will be returned if any of the shares
-// that are given are malicious (altered from their original value).
-func (r *Reconstructor) Open(shares Shares) (secp256k1.Fn, error) {
-	var secret secp256k1.Fn
-
-	// If there are more shares than indices, then either there is a share with
-	// an index not in the index set, or two shares have the same index. In
-	// either case, an error should be returned.
-	if len(shares) > len(r.indices) {
-		return secret, fmt.Errorf(
-			"too many shares: expected len(shares) <= %v, got len(shares) = %b",
-			len(r.indices), len(shares),
-		)
-	}
-
-	// Map the shares onto the corresponding indices in r.indices. That is,
-	// once the following is completed, it will be the case that
-	//		shares[i].Index == r.indices[r.indInts[i]]
-	r.indInts = r.indInts[:len(shares)]
-OUTER:
-	for i, share := range shares {
-		for j, ind := range r.indices {
-			if share.IndexEq(&ind) {
-				r.indInts[i] = j
-				continue OUTER
-			}
-		}
-
-		// If we get here, then it follows that the share did not have an index
-		// that is in the index set, so we return a corresponding error.
-		return secret, fmt.Errorf(
-			"unexpected share index: share has index %v which is out of the index set",
-			share.Index,
-		)
-	}
-
-	// Check if any of the shares have the same index. This is incorrect input,
-	// and so an error will be returned.
-	for i := range r.seen {
-		r.seen[i] = false
-	}
-	for _, ind := range r.indInts {
-		if r.seen[ind] {
-			return secret, fmt.Errorf(
-				"shares must have distinct indices: two shares have index %v",
-				r.indices[ind].Int(),
-			)
-		}
-		r.seen[ind] = true
-	}
-
-	// We now build up a list that corresponds to indices not in the index set.
-	// That is, we want that for every index i in r.indices that is not equal
-	// to share.Index for any of the shares in the input shares, that
-	// r.indices[r.complement[j]] == i for some j. In other words, r.complement
-	// contains the list locations in r.indices that correspond to indices not
-	// equal to share.Index for any of the shares.
-
-	// To achieve this, we first fill r.complement with 0s and 1s, where a 1 at
-	// index i represents that we want i in our final set.
-	r.complement = r.complement[:cap(r.complement)]
-	for i := range r.complement {
-		r.complement[i] = 1
-	}
-	for _, ind := range r.indInts {
-		r.complement[ind] = 0
-	}
-
-	// Now fill in the actual position values and compress the slice.
-	var toggle int
-	for i, j := 0, 0; i < len(r.indices); i++ {
-		toggle = r.complement[i]
-		r.complement[j] = toggle * i
-		j += toggle
-	}
-	r.complement = r.complement[:len(r.indices)-len(shares)]
-
-	// This is an altered form of Lagrange interpolation that aims to utilise
-	// more precomputed data. It works as follows. In the product, instead of
-	// ranging over every index in the shares, we use a precomputed value that
-	// ranges over all indices, and then to adjust it for the given shares we
-	// multiply this by  the inverse of the terms that should not be included
-	// in the product. This allows us to compute all inverses, which is the
-	// most expensive operation, in the precompute stage.
-	var term, diff secp256k1.Fn
-	for i, share := range shares {
-		term = share.Value
-		term.Mul(&term, &r.fullProd[r.indInts[i]])
-		for _, j := range r.complement {
-			diff.Negate(&r.indices[r.indInts[i]])
-			diff.Add(&r.indices[j], &diff)
-			term.Mul(&term, &diff)
-			term.Mul(&term, &r.indInv[j])
-		}
-		secret.Add(&secret, &term)
-	}
-
-	return secret, nil
-}
-
-// CheckedOpen is a wrapper around Open that also checks if enough shares have
-// been given for reconstruction, as determined by the given threshold k. If
-// there are less than k shares given, an error is returned.
-func (r *Reconstructor) CheckedOpen(shares Shares, k int) (secp256k1.Fn, error) {
-	if len(shares) < k {
-		return secp256k1.Fn{}, fmt.Errorf(
-			"not enough shares for reconstruction: expected at least %v, got %v",
-			k, len(shares),
-		)
-	}
-	return r.Open(shares)
+	return res
 }

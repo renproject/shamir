@@ -235,17 +235,14 @@ var _ = Describe("Verifiable secret sharing", func() {
 		})
 
 		Specify("the resulting secret should be the sum of the original secrets (3)", func() {
-			reconstructor := NewReconstructor(indices)
-
 			for i := 0; i < trials; i++ {
 				CreateShares(1)
 
 				sharesSummed := vsharesSummed.Shares()
-				recon, err := reconstructor.Open(sharesSummed)
-				Expect(err).ToNot(HaveOccurred())
+				recon := Open(sharesSummed)
 				Expect(recon.Eq(&secretSummed)).To(BeTrue())
 
-				Expect(VsharesAreConsistent(vsharesSummed, &reconstructor, kmax)).To(BeTrue())
+				Expect(VsharesAreConsistent(vsharesSummed, kmax)).To(BeTrue())
 			}
 		})
 	})
@@ -345,17 +342,14 @@ var _ = Describe("Verifiable secret sharing", func() {
 		})
 
 		Specify("the resulting secret should be the product of the original secret and the scale (3)", func() {
-			reconstructor := NewReconstructor(indices)
-
 			for i := 0; i < trials; i++ {
 				CreateShares(1)
 
 				sharesScaled := vsharesScaled.Shares()
-				recon, err := reconstructor.Open(sharesScaled)
-				Expect(err).ToNot(HaveOccurred())
+				recon := Open(sharesScaled)
 				Expect(recon.Eq(&secretScaled)).To(BeTrue())
 
-				Expect(VsharesAreConsistent(vsharesScaled, &reconstructor, k)).To(BeTrue())
+				Expect(VsharesAreConsistent(vsharesScaled, k)).To(BeTrue())
 			}
 		})
 	})
