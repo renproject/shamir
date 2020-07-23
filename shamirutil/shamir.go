@@ -58,7 +58,7 @@ func AddDuplicateIndex(shares shamir.Shares) {
 	}
 
 	// Set the second share to have the same index as the first.
-	shares[second] = shamir.NewShare(shares[first].Index(), shares[second].Value())
+	shares[second].Index = shares[first].Index
 }
 
 // SharesAreConsistent returns true if the given shares are found to be
@@ -85,35 +85,18 @@ func SharesAreConsistent(shares shamir.Shares, reconstructor *shamir.Reconstruct
 
 // PerturbIndex modifies the given verifiable share to have a random index.
 func PerturbIndex(vs *shamir.VerifiableShare) {
-	share := vs.Share()
-	*vs = shamir.NewVerifiableShare(
-		shamir.NewShare(
-			secp256k1.RandomFn(), // Altered
-			share.Value(),
-		),
-		vs.Decommitment(),
-	)
+	vs.Share.Index = secp256k1.RandomFn()
 }
 
 // PerturbValue modifies the given verifiable share to have a random value.
 func PerturbValue(vs *shamir.VerifiableShare) {
-	share := vs.Share()
-	*vs = shamir.NewVerifiableShare(
-		shamir.NewShare(
-			share.Index(),
-			secp256k1.RandomFn(), // Altered
-		),
-		vs.Decommitment(),
-	)
+	vs.Share.Value = secp256k1.RandomFn()
 }
 
 // PerturbDecommitment modifies the given verifiable share to have a random
 // decommitment value.
 func PerturbDecommitment(vs *shamir.VerifiableShare) {
-	*vs = shamir.NewVerifiableShare(
-		vs.Share(),
-		secp256k1.RandomFn(), // Altered
-	)
+	vs.Decommitment = secp256k1.RandomFn()
 }
 
 // VsharesAreConsistent is a wrapper around SharesAreConsistent for the

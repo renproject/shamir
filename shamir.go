@@ -61,12 +61,12 @@ func (shares *Shares) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 
 // Share represents a single share in a Shamir secret sharing scheme.
 type Share struct {
-	index, value secp256k1.Fn
+	Index, Value secp256k1.Fn
 }
 
 // NewShare constructs a new Shamir share from an index and a value.
 func NewShare(index, value secp256k1.Fn) Share {
-	return Share{index, value}
+	return Share{Index: index, Value: value}
 }
 
 // Generate implements the quick.Generator interface.
@@ -76,46 +76,36 @@ func (s Share) Generate(_ *rand.Rand, _ int) reflect.Value {
 
 // Eq returns true if the two shares are equal, and false otherwise.
 func (s *Share) Eq(other *Share) bool {
-	return s.index.Eq(&other.index) && s.value.Eq(&other.value)
+	return s.Index.Eq(&other.Index) && s.Value.Eq(&other.Value)
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (s Share) SizeHint() int { return s.index.SizeHint() + s.value.SizeHint() }
+func (s Share) SizeHint() int { return s.Index.SizeHint() + s.Value.SizeHint() }
 
 // Marshal implements the surge.Marshaler interface.
 func (s Share) Marshal(buf []byte, rem int) ([]byte, int, error) {
-	buf, rem, err := s.index.Marshal(buf, rem)
+	buf, rem, err := s.Index.Marshal(buf, rem)
 	if err != nil {
 		return buf, rem, err
 	}
 
-	return s.value.Marshal(buf, rem)
+	return s.Value.Marshal(buf, rem)
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.
 func (s *Share) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
-	buf, rem, err := s.index.Unmarshal(buf, rem)
+	buf, rem, err := s.Index.Unmarshal(buf, rem)
 	if err != nil {
 		return buf, rem, err
 	}
 
-	return s.value.Unmarshal(buf, rem)
-}
-
-// Index returns a copy of the index of the share.
-func (s *Share) Index() secp256k1.Fn {
-	return s.index
-}
-
-// Value returns a copy of the value of the share.
-func (s *Share) Value() secp256k1.Fn {
-	return s.value
+	return s.Value.Unmarshal(buf, rem)
 }
 
 // IndexEq returns true if the index of the two shares are equal, and false
 // otherwise.
 func (s *Share) IndexEq(other *secp256k1.Fn) bool {
-	return s.index.Eq(other)
+	return s.Index.Eq(other)
 }
 
 // Add computes the addition of the two input shares and stores the result in
@@ -125,24 +115,24 @@ func (s *Share) IndexEq(other *secp256k1.Fn) bool {
 // Panics: Addition only makes sense when the two input shares have the same
 // index. If they do not, this function wil panic.
 func (s *Share) Add(a, b *Share) {
-	if !a.index.Eq(&b.index) {
+	if !a.Index.Eq(&b.Index) {
 		panic(fmt.Sprintf(
 			"cannot add shares with different indices: lhs has index %v and rhs has index %v",
-			a.index,
-			b.index,
+			a.Index,
+			b.Index,
 		))
 	}
 
-	s.index = a.index
-	s.value.Add(&a.value, &b.value)
+	s.Index = a.Index
+	s.Value.Add(&a.Value, &b.Value)
 }
 
 // Scale multiplies the input share by a constant and then stores it in the
 // caller. This is defined as multiplying the share value by the scale, and
 // leaving the index unchanged.
 func (s *Share) Scale(other *Share, scale *secp256k1.Fn) {
-	s.index = other.index
-	s.value.Mul(&other.value, scale)
+	s.Index = other.Index
+	s.Value.Mul(&other.Value, scale)
 }
 
 // A Sharer is responsible for creating Shamir sharings of secrets. A Sharer
@@ -229,8 +219,8 @@ func (sharer *Sharer) Share(dst *Shares, secret secp256k1.Fn, k int) error {
 	var eval secp256k1.Fn
 	for i, ind := range sharer.indices {
 		polyEval(&eval, &ind, sharer.coeffs)
-		(*dst)[i].index = ind
-		(*dst)[i].value = eval
+		(*dst)[i].Index = ind
+		(*dst)[i].Value = eval
 	}
 
 	return nil
@@ -389,7 +379,7 @@ func (r *Reconstructor) Open(shares Shares) (secp256k1.Fn, error) {
 
 	// Map the shares onto the corresponding indices in r.indices. That is,
 	// once the following is completed, it will be the case that
-	//		shares[i].Index() == r.indices[r.indInts[i]]
+	//		shares[i].Index == r.indices[r.indInts[i]]
 	r.indInts = r.indInts[:len(shares)]
 OUTER:
 	for i, share := range shares {
@@ -404,7 +394,7 @@ OUTER:
 		// that is in the index set, so we return a corresponding error.
 		return secret, fmt.Errorf(
 			"unexpected share index: share has index %v which is out of the index set",
-			share.Index(),
+			share.Index,
 		)
 	}
 
@@ -425,10 +415,10 @@ OUTER:
 
 	// We now build up a list that corresponds to indices not in the index set.
 	// That is, we want that for every index i in r.indices that is not equal
-	// to share.Index() for any of the shares in the input shares, that
+	// to share.Index for any of the shares in the input shares, that
 	// r.indices[r.complement[j]] == i for some j. In other words, r.complement
 	// contains the list locations in r.indices that correspond to indices not
-	// equal to share.Index() for any of the shares.
+	// equal to share.Index for any of the shares.
 
 	// To achieve this, we first fill r.complement with 0s and 1s, where a 1 at
 	// index i represents that we want i in our final set.
@@ -458,7 +448,7 @@ OUTER:
 	// most expensive operation, in the precompute stage.
 	var term, diff secp256k1.Fn
 	for i, share := range shares {
-		term = share.Value()
+		term = share.Value
 		term.Mul(&term, &r.fullProd[r.indInts[i]])
 		for _, j := range r.complement {
 			diff.Negate(&r.indices[r.indInts[i]])

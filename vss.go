@@ -63,7 +63,7 @@ func (vshares VerifiableShares) Shares() Shares {
 	shares := make(Shares, len(vshares))
 
 	for i, vshare := range vshares {
-		shares[i] = vshare.Share()
+		shares[i] = vshare.Share
 	}
 
 	return shares
@@ -72,8 +72,8 @@ func (vshares VerifiableShares) Shares() Shares {
 // A VerifiableShare is a Share but with additional information that allows it
 // to be verified as correct for a given commitment to a sharing.
 type VerifiableShare struct {
-	share Share
-	r     secp256k1.Fn
+	Share        Share
+	Decommitment secp256k1.Fn
 }
 
 // Generate implements the quick.Generator interface.
@@ -96,41 +96,31 @@ func NewVerifiableShare(share Share, r secp256k1.Fn) VerifiableShare {
 
 // Eq returns true if the two verifiable shares are equal, and false otherwise.
 func (vs *VerifiableShare) Eq(other *VerifiableShare) bool {
-	return vs.share.Eq(&other.share) && vs.r.Eq(&other.r)
+	return vs.Share.Eq(&other.Share) && vs.Decommitment.Eq(&other.Decommitment)
 }
 
 // SizeHint implements the surge.SizeHinter interface.
-func (vs VerifiableShare) SizeHint() int { return vs.share.SizeHint() + vs.r.SizeHint() }
+func (vs VerifiableShare) SizeHint() int { return vs.Share.SizeHint() + vs.Decommitment.SizeHint() }
 
 // Marshal implements the surge.Marshaler interface.
 func (vs VerifiableShare) Marshal(buf []byte, rem int) ([]byte, int, error) {
-	buf, rem, err := vs.share.Marshal(buf, rem)
+	buf, rem, err := vs.Share.Marshal(buf, rem)
 	if err != nil {
 		return buf, rem, err
 	}
 
-	buf, rem, err = vs.r.Marshal(buf, rem)
+	buf, rem, err = vs.Decommitment.Marshal(buf, rem)
 	return buf, rem, err
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.
 func (vs *VerifiableShare) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
-	buf, rem, err := vs.share.Unmarshal(buf, rem)
+	buf, rem, err := vs.Share.Unmarshal(buf, rem)
 	if err != nil {
 		return buf, rem, err
 	}
 
-	return vs.r.Unmarshal(buf, rem)
-}
-
-// Share returns the underlying Shamir share of the verifiable share.
-func (vs *VerifiableShare) Share() Share {
-	return vs.share
-}
-
-// Decommitment returns the index of the verifiable share.
-func (vs *VerifiableShare) Decommitment() secp256k1.Fn {
-	return vs.r
+	return vs.Decommitment.Unmarshal(buf, rem)
 }
 
 // Add computes the addition of the two input shares and stores the result in
@@ -139,8 +129,8 @@ func (vs *VerifiableShare) Decommitment() secp256k1.Fn {
 // resulting share will be a share with secret value equal to the sum of the
 // two secrets corresponding to the (respective sharings of the) input shares.
 func (vs *VerifiableShare) Add(a, b *VerifiableShare) {
-	vs.share.Add(&a.share, &b.share)
-	vs.r.Add(&a.r, &b.r)
+	vs.Share.Add(&a.Share, &b.Share)
+	vs.Decommitment.Add(&a.Decommitment, &b.Decommitment)
 }
 
 // Scale computes the scaling of the input share by given scale factor and
@@ -150,8 +140,8 @@ func (vs *VerifiableShare) Add(a, b *VerifiableShare) {
 // share with secret value equal to the scale factor multiplied by the secret
 // corresponding to the (sharing of the) input share.
 func (vs *VerifiableShare) Scale(other *VerifiableShare, scale *secp256k1.Fn) {
-	vs.share.Scale(&other.share, scale)
-	vs.r.Mul(&other.r, scale)
+	vs.Share.Scale(&other.Share, scale)
+	vs.Decommitment.Mul(&other.Decommitment, scale)
 }
 
 // A Commitment is used to verify that a sharing has been performed correctly.
@@ -355,11 +345,11 @@ func NewVSSChecker(h secp256k1.Point) VSSChecker {
 // IsValid returns true when the given verifiable share is valid with regard to
 // the given commitment, and false otherwise.
 func (checker *VSSChecker) IsValid(c *Commitment, vshare *VerifiableShare) bool {
-	checker.gPow.BaseExp(&vshare.share.value)
-	checker.hPow.Scale(&checker.h, &vshare.r)
+	checker.gPow.BaseExp(&vshare.Share.Value)
+	checker.hPow.Scale(&checker.h, &vshare.Decommitment)
 	checker.gPow.Add(&checker.gPow, &checker.hPow)
 
-	c.evaluate(&checker.eval, &vshare.share.index)
+	c.evaluate(&checker.eval, &vshare.Share.Index)
 	return checker.gPow.Eq(&checker.eval)
 }
 
@@ -457,8 +447,8 @@ func (s *VSSharer) Share(vshares *VerifiableShares, c *Commitment, secret secp25
 
 	s.sharer.setRandomCoeffs(secp256k1.RandomFn(), k)
 	for i, ind := range s.sharer.indices {
-		(*vshares)[i].share = s.shares[i]
-		polyEval(&(*vshares)[i].r, &ind, s.sharer.coeffs)
+		(*vshares)[i].Share = s.shares[i]
+		polyEval(&(*vshares)[i].Decommitment, &ind, s.sharer.coeffs)
 	}
 
 	// Finish the computation of the commitments
