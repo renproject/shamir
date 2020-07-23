@@ -16,12 +16,10 @@ var _ = Describe("Surge marshalling", func() {
 	types := []reflect.Type{
 		reflect.TypeOf(Share{}),
 		reflect.TypeOf(Shares{}),
-		reflect.TypeOf(Sharer{}),
 		reflect.TypeOf(Reconstructor{}),
 		reflect.TypeOf(Commitment{}),
 		reflect.TypeOf(VerifiableShare{}),
 		reflect.TypeOf(VerifiableShares{}),
-		reflect.TypeOf(VSSharer{}),
 	}
 
 	for _, t := range types {

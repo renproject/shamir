@@ -310,87 +310,26 @@ func IsValid(h secp256k1.Point, c *Commitment, vshare *VerifiableShare) bool {
 	return gPow.Eq(&eval)
 }
 
-// A VSSharer is capable of creating a verifiable sharing of a secret, which is
-// just a normal Shamir sharing but with the addition of a commitment which is
-// a collection of commitments to each of the coefficients of the sharing.
-//
-// NOTE: This struct is not safe for concurrent use.
-type VSSharer struct {
-	sharer Sharer
-	h      secp256k1.Point
-
-	// Cached variables
-	shares Shares
-	hPow   secp256k1.Point
-}
-
-// Generate implements the quick.Generator interface.
-func (s VSSharer) Generate(rand *rand.Rand, size int) reflect.Value {
-	indices := make([]secp256k1.Fn, rand.Intn(size))
-	for i := range indices {
-		indices[i] = secp256k1.RandomFn()
-	}
-	return reflect.ValueOf(NewVSSharer(indices, secp256k1.RandomPoint()))
-}
-
-// SizeHint implements the surge.SizeHinter interface.
-func (s VSSharer) SizeHint() int { return s.sharer.SizeHint() + s.h.SizeHint() }
-
-// Marshal implements the surge.Marshaler interface.
-func (s VSSharer) Marshal(buf []byte, rem int) ([]byte, int, error) {
-	buf, rem, err := s.sharer.Marshal(buf, rem)
-	if err != nil {
-		return buf, rem, err
-	}
-
-	buf, rem, err = s.h.Marshal(buf, rem)
-	if err != nil {
-		return buf, rem, err
-	}
-
-	return buf, rem, nil
-}
-
-// Unmarshal implements the surge.Unmarshaler interface.
-func (s *VSSharer) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
-	buf, rem, err := s.sharer.Unmarshal(buf, rem)
-	if err != nil {
-		return buf, rem, err
-	}
-
-	buf, rem, err = s.h.Unmarshal(buf, rem)
-	if err != nil {
-		return buf, rem, err
-	}
-
-	s.shares = make(Shares, len(s.sharer.indices))
-	return buf, rem, nil
-}
-
-// N returns the number of players associated with this VSSharer instance. This
-// is equal to the number of indices it was constructed with.
-func (s *VSSharer) N() int {
-	return s.sharer.N()
-}
-
-// NewVSSharer constructs a new VSSharer from the given set of indices.
-func NewVSSharer(indices []secp256k1.Fn, h secp256k1.Point) VSSharer {
-	sharer := NewSharer(indices)
-	shares := make(Shares, len(indices))
-	hPow := secp256k1.Point{}
-	return VSSharer{sharer, h, shares, hPow}
-}
-
-// Share creates verifiable Shamir shares for the given secret at the given
-// threshold, and stores the shares and the commitment in the given
+// VShareSecret creates verifiable Shamir shares for the given secret at the
+// given threshold, and stores the shares and the commitment in the given
 // destinations. In the returned Shares, there will be one share for each index
 // in the indices that were used to construct the Sharer.
 //
 // Panics: This function will panic if the destination shares slice has a
 // capacity less than n (the number of indices), or if the destination
 // commitment has a capacity less than k.
-func (s *VSSharer) Share(vshares *VerifiableShares, c *Commitment, secret secp256k1.Fn, k int) error {
-	err := s.sharer.Share(&s.shares, secret, k)
+func VShareSecret(
+	vshares *VerifiableShares,
+	c *Commitment,
+	indices []secp256k1.Fn,
+	h secp256k1.Point,
+	secret secp256k1.Fn,
+	k int,
+) error {
+	n := len(indices)
+	shares := make(Shares, n)
+	coeffs := make([]secp256k1.Fn, k)
+	err := ShareAndGetCoeffs(&shares, coeffs, indices, secret, k)
 	if err != nil {
 		return err
 	}
@@ -398,20 +337,21 @@ func (s *VSSharer) Share(vshares *VerifiableShares, c *Commitment, secret secp25
 	// At this point, the sharer should still have the randomly picked
 	// coefficients in its cache, which we need to use for the commitment.
 	*c = (*c)[:k]
-	for i, coeff := range s.sharer.coeffs {
+	for i, coeff := range coeffs {
 		(*c)[i].BaseExp(&coeff)
 	}
 
-	s.sharer.setRandomCoeffs(secp256k1.RandomFn(), k)
-	for i, ind := range s.sharer.indices {
-		(*vshares)[i].Share = s.shares[i]
-		polyEval(&(*vshares)[i].Decommitment, &ind, s.sharer.coeffs)
+	setRandomCoeffs(coeffs, secp256k1.RandomFn(), k)
+	for i, ind := range indices {
+		(*vshares)[i].Share = shares[i]
+		polyEval(&(*vshares)[i].Decommitment, &ind, coeffs)
 	}
 
 	// Finish the computation of the commitments
-	for i, coeff := range s.sharer.coeffs {
-		s.hPow.Scale(&s.h, &coeff)
-		(*c)[i].Add(&(*c)[i], &s.hPow)
+	var hPow secp256k1.Point
+	for i, coeff := range coeffs {
+		hPow.Scale(&h, &coeff)
+		(*c)[i].Add(&(*c)[i], &hPow)
 	}
 
 	return nil

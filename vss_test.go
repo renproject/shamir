@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/renproject/secp256k1"
-	"github.com/renproject/surge"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -63,14 +62,13 @@ var _ = Describe("Verifiable secret sharing", func() {
 		indices := RandomIndices(n)
 		vshares := make(VerifiableShares, n)
 		c := NewCommitmentWithCapacity(n)
-		vssharer := NewVSSharer(indices, h)
 
 		Specify("all shares constructed from the VSS scheme should be valid", func() {
 			for i := 0; i < trials; i++ {
 				// Create a random sharing.
 				k = RandRange(1, n)
 				secret = secp256k1.RandomFn()
-				err := vssharer.Share(&vshares, &c, secret, k)
+				err := VShareSecret(&vshares, &c, indices, h, secret, k)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Check that all shares are valid.
@@ -96,21 +94,19 @@ var _ = Describe("Verifiable secret sharing", func() {
 		var indices []secp256k1.Fn
 		var vshares VerifiableShares
 		var c Commitment
-		var vssharer VSSharer
 		var secret secp256k1.Fn
 
 		BeforeEach(func() {
 			indices = RandomIndices(n)
 			vshares = make(VerifiableShares, n)
 			c = NewCommitmentWithCapacity(n)
-			vssharer = NewVSSharer(indices, h)
 		})
 
 		ShareAndCheckWithPerturbed := func(kLower int, perturbShare func(vs *VerifiableShare)) {
 			for i := 0; i < trials; i++ {
 				k = RandRange(kLower, n)
 				secret = secp256k1.RandomFn()
-				err := vssharer.Share(&vshares, &c, secret, k)
+				err := VShareSecret(&vshares, &c, indices, h, secret, k)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Change one of the shares to be invalid
@@ -160,7 +156,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 		var indices []secp256k1.Fn
 		var vshares1, vshares2, vsharesSummed VerifiableShares
 		var c1, c2, cSummed Commitment
-		var vssharer VSSharer
 		var secret1, secret2, secretSummed secp256k1.Fn
 
 		BeforeEach(func() {
@@ -171,7 +166,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 			c1 = NewCommitmentWithCapacity(n)
 			c2 = NewCommitmentWithCapacity(n)
 			cSummed = NewCommitmentWithCapacity(n)
-			vssharer = NewVSSharer(indices, h)
 		})
 
 		CreateShares := func(kLower int) {
@@ -181,8 +175,8 @@ var _ = Describe("Verifiable secret sharing", func() {
 			secret1 = secp256k1.RandomFn()
 			secret2 = secp256k1.RandomFn()
 			secretSummed.Add(&secret1, &secret2)
-			_ = vssharer.Share(&vshares1, &c1, secret1, k1)
-			_ = vssharer.Share(&vshares2, &c2, secret2, k2)
+			_ = VShareSecret(&vshares1, &c1, indices, h, secret1, k1)
+			_ = VShareSecret(&vshares2, &c2, indices, h, secret2, k2)
 
 			// Create the shares for the sum
 			cSummed.Add(c1, c2)
@@ -277,7 +271,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 		var indices []secp256k1.Fn
 		var vshares, vsharesScaled VerifiableShares
 		var c, cScaled Commitment
-		var vssharer VSSharer
 		var secret, scale, secretScaled secp256k1.Fn
 
 		BeforeEach(func() {
@@ -286,7 +279,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 			vsharesScaled = make(VerifiableShares, n)
 			c = NewCommitmentWithCapacity(n)
 			cScaled = NewCommitmentWithCapacity(n)
-			vssharer = NewVSSharer(indices, h)
 		})
 
 		CreateShares := func(kLower int) {
@@ -294,7 +286,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 			secret = secp256k1.RandomFn()
 			scale = secp256k1.RandomFn()
 			secretScaled.Mul(&secret, &scale)
-			_ = vssharer.Share(&vshares, &c, secret, k)
+			_ = VShareSecret(&vshares, &c, indices, h, secret, k)
 
 			// Create the scaled shares
 			cScaled.Scale(c, &scale)
@@ -376,9 +368,8 @@ var _ = Describe("Verifiable secret sharing", func() {
 		n := 20
 
 		indices := RandomIndices(n)
-		vsharer := NewVSSharer(indices, h)
 
-		err := vsharer.Share(nil, nil, secp256k1.Fn{}, n+1)
+		err := VShareSecret(nil, nil, indices, h, secp256k1.Fn{}, n+1)
 		Expect(err).To(HaveOccurred())
 	})
 
@@ -514,49 +505,6 @@ var _ = Describe("Verifiable secret sharing", func() {
 		})
 	})
 
-	Context("VSS Sharer", func() {
-		trials := 20
-		const n int = 20
-
-		var k int
-		var secret secp256k1.Fn
-
-		indices := RandomIndices(n)
-		vshares := make(VerifiableShares, n)
-		c := NewCommitmentWithCapacity(n)
-		vssharer := NewVSSharer(indices, h)
-
-		It("should work correctly after marshalling and unmarshalling", func() {
-			for i := 0; i < trials; i++ {
-				// Create a random sharing.
-				k = RandRange(1, n)
-				secret = secp256k1.RandomFn()
-
-				// Marhsal and unmarshal the vssharer.
-				bs, err := surge.ToBinary(&vssharer)
-				Expect(err).ToNot(HaveOccurred())
-				err = surge.FromBinary(&vssharer, bs[:])
-				Expect(err).ToNot(HaveOccurred())
-
-				err = vssharer.Share(&vshares, &c, secret, k)
-				Expect(err).ToNot(HaveOccurred())
-
-				// Check that all shares are valid.
-				for _, share := range vshares {
-					Expect(IsValid(h, &c, &share)).To(BeTrue())
-				}
-			}
-		})
-
-		It("should correctly give the number of indices", func() {
-			for i := 0; i < trials; i++ {
-				n := RandRange(1, n)
-				vssharer := NewVSSharer(RandomIndices(n), h)
-				Expect(vssharer.N()).To(Equal(n))
-			}
-		})
-	})
-
 	Context("Constants", func() {
 		Specify("VShareSize should have the correct value", func() {
 			vshare := VerifiableShare{}
@@ -573,12 +521,11 @@ func BenchmarkVSShare(b *testing.B) {
 	indices := RandomIndices(n)
 	vshares := make(VerifiableShares, n)
 	c := NewCommitmentWithCapacity(n)
-	vssharer := NewVSSharer(indices, h)
 	secret := secp256k1.RandomFn()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = vssharer.Share(&vshares, &c, secret, k)
+		_ = VShareSecret(&vshares, &c, indices, h, secret, k)
 	}
 }
 
@@ -590,9 +537,8 @@ func BenchmarkVSSVerify(b *testing.B) {
 	indices := RandomIndices(n)
 	vshares := make(VerifiableShares, n)
 	c := NewCommitmentWithCapacity(n)
-	vssharer := NewVSSharer(indices, h)
 	secret := secp256k1.RandomFn()
-	_ = vssharer.Share(&vshares, &c, secret, k)
+	_ = VShareSecret(&vshares, &c, indices, h, secret, k)
 	ind := rand.Intn(n)
 	share := vshares[ind]
 
