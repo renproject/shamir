@@ -2,12 +2,9 @@ package poly
 
 import (
 	"fmt"
-	"math/rand"
-	"reflect"
 
 	"github.com/renproject/secp256k1"
 	"github.com/renproject/shamir/shamirutil"
-	"github.com/renproject/surge"
 )
 
 // Poly represents a polynomial in the field defined by the elliptic curve
@@ -454,58 +451,4 @@ func Divide(a, b Poly, q, r *Poly) {
 	if len(*r) == 0 {
 		r.Zero()
 	}
-}
-
-// Generate implements the quick.Generator interface.
-func (p Poly) Generate(_ *rand.Rand, size int) reflect.Value {
-	poly := make(Poly, size)
-	for i := range poly {
-		poly[i] = secp256k1.RandomFn()
-	}
-	return reflect.ValueOf(poly)
-}
-
-// SizeHint implements the surge.SizeHinter interface.
-func (p Poly) SizeHint() int {
-	return surge.SizeHintU32 + secp256k1.FnSizeMarshalled*len(p)
-}
-
-// Marshal implements the surge.Marshaler interface.
-func (p Poly) Marshal(buf []byte, rem int) ([]byte, int, error) {
-	buf, rem, err := surge.MarshalLen(uint32(len(p)), buf, rem)
-	if err != nil {
-		return buf, rem, err
-	}
-	for _, c := range p {
-		buf, rem, err = c.Marshal(buf, rem)
-		if err != nil {
-			return buf, rem, err
-		}
-	}
-	return buf, rem, nil
-}
-
-// Unmarshal implements the surge.Unmarshaler interface.
-func (p *Poly) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
-	var l uint32
-	buf, rem, err := surge.UnmarshalLen(&l, secp256k1.FnSize, buf, rem)
-	if err != nil {
-		return buf, rem, err
-	}
-	if l == 0 {
-		*p = []secp256k1.Fn{}
-		return buf, rem, nil
-	}
-	if len(*p) < int(l) {
-		*p = make(Poly, l)
-	} else {
-		*p = (*p)[:l]
-	}
-	for i := range *p {
-		buf, rem, err = (*p)[i].Unmarshal(buf, rem)
-		if err != nil {
-			return buf, rem, err
-		}
-	}
-	return buf, rem, nil
 }
