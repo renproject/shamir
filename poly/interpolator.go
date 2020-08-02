@@ -1,11 +1,7 @@
 package poly
 
 import (
-	"math/rand"
-	"reflect"
-
 	"github.com/renproject/secp256k1"
-	"github.com/renproject/surge"
 )
 
 // Interpolator can perform polynomial interpolation. That is, the act of
@@ -84,31 +80,4 @@ func (interp *Interpolator) Interpolate(values []secp256k1.Fn, poly *Poly) {
 	for i := 1; i < len(interp.basis); i++ {
 		poly.AddScaled(*poly, interp.basis[i], values[i])
 	}
-}
-
-// Generate implements the quick.Generator interface.
-func (interp Interpolator) Generate(_ *rand.Rand, size int) reflect.Value {
-	n := rand.Intn(size + 1)
-	m := size / (n + 1)
-	basis := make([]Poly, n)
-	for i := range basis {
-		basis[i] = make(Poly, m)
-		for j := range basis[i] {
-			basis[i][j] = secp256k1.RandomFn()
-		}
-	}
-	return reflect.ValueOf(Interpolator{basis: basis})
-}
-
-// SizeHint implements the surge.SizeHinter interface.
-func (interp Interpolator) SizeHint() int { return surge.SizeHint(interp.basis) }
-
-// Marshal implements the surge.Marshaler interface.
-func (interp Interpolator) Marshal(buf []byte, rem int) ([]byte, int, error) {
-	return surge.Marshal(interp.basis, buf, rem)
-}
-
-// Unmarshal implements the surge.Unmarshaler interface.
-func (interp *Interpolator) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
-	return surge.Unmarshal(&interp.basis, buf, rem)
 }
