@@ -56,7 +56,7 @@ func (p *Poly) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 		*p = make([]secp256k1.Fn, 0, c)
 		return buf, rem, nil
 	}
-	if len(*p) < int(l) {
+	if len(*p) < int(l) || cap(*p) < int(c) {
 		*p = make(Poly, l, c)
 	} else {
 		*p = (*p)[:l]
