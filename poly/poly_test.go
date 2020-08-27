@@ -118,6 +118,13 @@ var _ = Describe("Polynomials", func() {
 			poly[0] = zero
 
 			Expect(poly.IsZero()).To(BeTrue())
+
+			// Additional leading zeros should not affect the result.
+			for i := 2; i < 10; i++ {
+				poly = append(poly, secp256k1.Fn{})
+				Expect(poly.IsZero()).To(BeTrue())
+				Expect(len(poly)).To(Equal(i))
+			}
 		})
 
 		It("should return false when given a polynomial with degree 0 but non-zero constant term", func() {
@@ -170,6 +177,21 @@ var _ = Describe("Polynomials", func() {
 				b.Set(a)
 
 				Expect(a.Eq(b)).To(BeTrue())
+
+				// The result should remain true when there are additional
+				// leading zeros.
+				aEx := append(a, secp256k1.Fn{})
+				bEx := append(b, secp256k1.Fn{})
+
+				Expect(aEx.Eq(b)).To(BeTrue())
+				Expect(len(aEx)).To(Equal(len(a) + 1))
+
+				Expect(a.Eq(bEx)).To(BeTrue())
+				Expect(len(bEx)).To(Equal(len(b) + 1))
+
+				Expect(aEx.Eq(bEx)).To(BeTrue())
+				Expect(len(aEx)).To(Equal(len(a) + 1))
+				Expect(len(bEx)).To(Equal(len(b) + 1))
 			}
 		})
 
