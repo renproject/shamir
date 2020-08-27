@@ -264,12 +264,13 @@ var _ = Describe("Shamir Secret Sharing", func() {
 	//
 	// Secret sharing tests
 	//
-	// We will test the two failure branches of creating shares:
+	// We will test the three failure branches of creating shares:
 	//
 	//	1. If k is larger than the number of indices, the function will return
 	//	an error.
 	//	2. If the destination slice is too small to hold all of the shares, the
 	//	function will panic.
+	//	3. Any of the indices is the zero element.
 	//
 
 	Context("Sharer", func() {
@@ -300,6 +301,18 @@ var _ = Describe("Shamir Secret Sharing", func() {
 				k := RandRange(1, n)
 				secret := secp256k1.RandomFn()
 				shares := make(Shares, rand.Intn(n))
+				Expect(func() { ShareSecret(&shares, indices, secret, k) }).Should(Panic())
+			}
+		})
+
+		It("should panic if one of the indices is the zero element (3)", func() {
+			shares := make(Shares, n)
+
+			for i := 0; i < trials; i++ {
+				indices = RandomIndices(n)
+				k := RandRange(1, n)
+				secret := secp256k1.RandomFn()
+				indices[rand.Intn(len(indices))].Clear()
 				Expect(func() { ShareSecret(&shares, indices, secret, k) }).Should(Panic())
 			}
 		})
