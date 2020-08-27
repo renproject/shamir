@@ -2,6 +2,7 @@ package poly_test
 
 import (
 	"math/rand"
+	"testing"
 
 	"github.com/renproject/secp256k1"
 
@@ -1080,4 +1081,47 @@ func subCheckDegree(a, b, c Poly) bool {
 	}
 
 	return c.Degree() == degreeA
+}
+
+func BenchmarkPolyAdd(b *testing.B) {
+	n := 100
+	poly1 := NewWithCapacity(n)
+	poly2 := NewWithCapacity(n)
+	polySum := NewWithCapacity(n)
+
+	polyutil.SetRandomPolynomial(&poly1, n-1)
+	polyutil.SetRandomPolynomial(&poly2, n-1)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		polySum.Add(poly1, poly2)
+	}
+}
+
+func BenchmarkPolyMul(b *testing.B) {
+	n := 50
+	poly1 := NewWithCapacity(n)
+	poly2 := NewWithCapacity(n)
+	polyProd := NewWithCapacity(2 * n)
+
+	polyutil.SetRandomPolynomial(&poly1, n-1)
+	polyutil.SetRandomPolynomial(&poly2, n-1)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		polyProd.Mul(poly1, poly2)
+	}
+}
+
+func BenchmarkPolyInterpolate(b *testing.B) {
+	n := 100
+	indices := shamirutil.RandomIndices(n)
+	values := shamirutil.RandomIndices(n)
+	poly := NewWithCapacity(n)
+	interp := NewInterpolator(indices)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		interp.Interpolate(values, &poly)
+	}
 }
