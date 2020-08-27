@@ -4,15 +4,16 @@ import (
 	"math/rand"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	. "github.com/renproject/shamir/rs"
-
 	"github.com/renproject/secp256k1"
 	"github.com/renproject/shamir/eea/eeautil"
 	"github.com/renproject/shamir/poly"
 	"github.com/renproject/shamir/poly/polyutil"
 	"github.com/renproject/shamir/shamirutil"
+	"github.com/renproject/surge"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	. "github.com/renproject/shamir/rs"
 )
 
 var _ = Describe("Reed-Solomon Decoding", func() {
@@ -31,6 +32,14 @@ var _ = Describe("Reed-Solomon Decoding", func() {
 				k = rand.Intn(n) + 1
 				indices := shamirutil.RandomIndices(n)
 				decoder := NewDecoder(indices, k)
+
+				// Marshal and then unmarshal the decoder before using it, to
+				// check that no crucial information is lost during this
+				// process.
+				decoderData, err := surge.ToBinary(decoder)
+				Expect(err).ToNot(HaveOccurred())
+				decoder = Decoder{}
+				Expect(surge.FromBinary(&decoder, decoderData)).To(Succeed())
 
 				polyutil.SetRandomPolynomial(&poly, k-1)
 				values = values[:n]
@@ -62,6 +71,14 @@ var _ = Describe("Reed-Solomon Decoding", func() {
 				t = (n - k) / 2
 				indices := shamirutil.RandomIndices(n)
 				decoder := NewDecoder(indices, k)
+
+				// Marshal and then unmarshal the decoder before using it, to
+				// check that no crucial information is lost during this
+				// process.
+				decoderData, err := surge.ToBinary(decoder)
+				Expect(err).ToNot(HaveOccurred())
+				decoder = Decoder{}
+				Expect(surge.FromBinary(&decoder, decoderData)).To(Succeed())
 
 				polyutil.SetRandomPolynomial(&poly, k-1)
 				values = values[:n]
@@ -108,6 +125,14 @@ var _ = Describe("Reed-Solomon Decoding", func() {
 				indices := shamirutil.RandomIndices(n)
 				decoder := NewDecoder(indices, k)
 
+				// Marshal and then unmarshal the decoder before using it, to
+				// check that no crucial information is lost during this
+				// process.
+				decoderData, err := surge.ToBinary(decoder)
+				Expect(err).ToNot(HaveOccurred())
+				decoder = Decoder{}
+				Expect(surge.FromBinary(&decoder, decoderData)).To(Succeed())
+
 				polyutil.SetRandomPolynomial(&poly, k-1)
 				values = values[:n]
 				for j, index := range indices {
@@ -137,6 +162,15 @@ var _ = Describe("Reed-Solomon Decoding", func() {
 			}
 
 			decoder := NewDecoder(indices[:], k)
+
+			// Marshal and then unmarshal the decoder before using it, to
+			// check that no crucial information is lost during this
+			// process.
+			decoderData, err := surge.ToBinary(decoder)
+			Expect(err).ToNot(HaveOccurred())
+			decoder = Decoder{}
+			Expect(surge.FromBinary(&decoder, decoderData)).To(Succeed())
+
 			Expect(decoder.ErrorIndices()).To(BeNil())
 		})
 	})
