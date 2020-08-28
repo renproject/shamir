@@ -80,8 +80,13 @@ func ShareSecret(dst *Shares, indices []secp256k1.Fn, secret secp256k1.Fn, k int
 //
 // Panics: This function will panic if the destination shares slice has a
 // capacity less than n (the number of indices) or the coefficients slice has
-// length less than k.
+// length less than k, or any of the given indices is the zero element.
 func ShareAndGetCoeffs(dst *Shares, coeffs, indices []secp256k1.Fn, secret secp256k1.Fn, k int) error {
+	for _, index := range indices {
+		if index.IsZero() {
+			panic("cannot create share for index zero")
+		}
+	}
 	if k > len(indices) {
 		return fmt.Errorf(
 			"reconstruction threshold too large: expected k <= %v, got k = %v",
