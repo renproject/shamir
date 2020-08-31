@@ -101,24 +101,30 @@ func (p *Poly) Set(a Poly) {
 // otherwise. The zero polynomial is defined to have degree 0 and a constant
 // term that is equal to 0 (the additive identity in the field).
 func (p *Poly) IsZero() bool {
-	if p.Degree() != 0 {
+	truncated := *p
+	truncated.removeLeadingZeros()
+	if truncated.Degree() != 0 {
 		return false
 	}
 
-	return p.Coefficient(0).IsZero()
+	return truncated.Coefficient(0).IsZero()
 }
 
 // Eq returns true if the two polynomials are equal and false if they are not.
 // Equality of polynomials is defined as all coefficients being equal.
 func (p *Poly) Eq(other Poly) bool {
+	truncated := *p
+	truncated.removeLeadingZeros()
+	other.removeLeadingZeros()
+
 	// Short circuit if the polynomials have different degrees
-	if p.Degree() != other.Degree() {
+	if truncated.Degree() != other.Degree() {
 		return false
 	}
 
 	// Otherwise check each coefficient
-	for i := range *p {
-		if !p.Coefficient(i).Eq(other.Coefficient(i)) {
+	for i := range truncated {
+		if !truncated.Coefficient(i).Eq(other.Coefficient(i)) {
 			return false
 		}
 	}
