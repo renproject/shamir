@@ -133,6 +133,17 @@ func (vs *VerifiableShare) Add(a, b *VerifiableShare) {
 	vs.Decommitment.Add(&a.Decommitment, &b.Decommitment)
 }
 
+// AddConstant computes the addition of the input share and the constant and
+// stores the result in the caller. This is defined as adding the constant to
+// the normal (unverifiable) share and leaving the decommitment value
+// unchanged. In general, the resulting share will be a share with secret value
+// equal to the sum of the secret corresponding to the input share and the
+// constant.
+func (vs *VerifiableShare) AddConstant(other *VerifiableShare, c *secp256k1.Fn) {
+	vs.Decommitment = other.Decommitment
+	vs.Share.AddConstant(&other.Share, c)
+}
+
 // Scale computes the scaling of the input share by given scale factor and
 // stores the result in the caller. This is defined as scaling the normal
 // (unverifiable) share by the scaling factor and multiplying the decommitment
@@ -271,6 +282,20 @@ func (c *Commitment) Add(a, b Commitment) {
 		(*c)[i].Add(&smaller[i], &larger[i])
 	}
 	copy((*c)[len(smaller):], larger[len(smaller):])
+}
+
+// Add takes an input commitment and a constant and stores in the caller the
+// commitment that represents the addition of this commitment and the constant.
+// That is, the new commitment can be used to verify the correctness of the
+// sharing defined by adding the constant to the corresponding sharing for the
+// input commitment. For example, if `a_i` is a valid share for the commitment
+// `a`, and `c` is a constant, then `a_i.AddConstant(c)` will be a valid share
+// for the newly constructed commitment.
+func (c *Commitment) AddConstant(other Commitment, constant *secp256k1.Fn) {
+	c.Set(other)
+	point := secp256k1.Point{}
+	point.BaseExp(constant)
+	(*c)[0].Add(&(*c)[0], &point)
 }
 
 // Scale takes an input commitment and stores in the caller the commitment that

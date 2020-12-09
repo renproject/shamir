@@ -37,7 +37,11 @@ import (
 //	commitment. Further, this new share and commitment will form part of a
 //	valid verifiable sharing of the sum of the two original secrets.
 //
-//	4. Homomorphic under scaling: Pedersen VSS is also homomorphic under
+//	4. Homomorphic under addition of a constant: Pedersen VSS is also
+//	homomorphic under addition by some public constant value. We require a
+//	property analogous to point 3 in this case.
+//
+//	5. Homomorphic under scaling: Pedersen VSS is also homomorphic under
 //	scaling by some public constant value. We require a property analogous to
 //	point 3 in this case.
 //
@@ -247,6 +251,113 @@ var _ = Describe("Verifiable secret sharing", func() {
 		})
 	})
 
+	// Tests for the Homomorphic addition of a constant property (4). This
+	// property states that if we have a sharing and then add a public constant
+	// (also adding the constant to the auxiliary information), we should get a
+	// new sharing that is valid and corresponds to the sum of the original
+	// secret and the constant. Specifically, we want the following to hold
+	// after adding a constant to a sharing:
+	//
+	//	1. Each resulting share should be valid when checked against the new
+	//	resulting auxiliary information.
+	//	2. If one of the newly created shares is altered in any way, this share
+	//	should fail the validity check of the new auxiliary information.
+	//	3. The resulting shares should form a consistent sharing of the secret
+	//	that is defined as the sum of the original secret and the constant.
+	Context("Homomorphic addition of constant (4)", func() {
+		trials := 20
+		n := 20
+
+		var k int
+		var indices []secp256k1.Fn
+		var vshares, vsharesSummed VerifiableShares
+		var c, cSummed Commitment
+		var secret, constant, secretSummed secp256k1.Fn
+
+		BeforeEach(func() {
+			indices = RandomIndices(n)
+			vshares = make(VerifiableShares, n)
+			vsharesSummed = make(VerifiableShares, n)
+			c = NewCommitmentWithCapacity(n)
+			cSummed = NewCommitmentWithCapacity(n)
+		})
+
+		CreateShares := func(kLower int) {
+			k = RandRange(kLower, n)
+			secret = secp256k1.RandomFn()
+			constant = secp256k1.RandomFn()
+			secretSummed.Add(&secret, &constant)
+			_ = VShareSecret(&vshares, &c, indices, h, secret, k)
+
+			// Create the shares for the sum
+			cSummed.AddConstant(c, &constant)
+			for i := range vsharesSummed {
+				vsharesSummed[i].AddConstant(&vshares[i], &constant)
+			}
+		}
+
+		PerturbAndCheck := func(perturb func(vs *VerifiableShare)) {
+			badInd := rand.Intn(n)
+			perturb(&vsharesSummed[badInd])
+
+			// The shares should be valid
+			for i, share := range vsharesSummed {
+				Expect(IsValid(h, &cSummed, &share)).To(Equal(i != badInd))
+			}
+		}
+
+		Specify("the summed shares should be valid (1)", func() {
+			for i := 0; i < trials; i++ {
+				CreateShares(1)
+
+				// The shares should be valid
+				for _, share := range vsharesSummed {
+					Expect(IsValid(h, &cSummed, &share)).To(BeTrue())
+				}
+			}
+		})
+
+		// The parts of a share that can be maliciously altered are the:
+		//	1. Index
+		//	2. Value
+		//	3. Decommitment
+		Specify("a share with an altered index should be detected (2.1)", func() {
+			for i := 0; i < trials; i++ {
+				// We need to ensure that k is at least 2, otherwise every
+				// point on the sharing polynomial is the same and changing the
+				// index won't actually make the share invalid.
+				CreateShares(2)
+				PerturbAndCheck(PerturbIndex)
+			}
+		})
+
+		Specify("a share with an altered value should be detected (2.2)", func() {
+			for i := 0; i < trials; i++ {
+				CreateShares(1)
+				PerturbAndCheck(PerturbValue)
+			}
+		})
+
+		Specify("a share with an altered decommitment should be detected (2.3)", func() {
+			for i := 0; i < trials; i++ {
+				CreateShares(1)
+				PerturbAndCheck(PerturbDecommitment)
+			}
+		})
+
+		Specify("the resulting secret should be the sum of the original secret and the constant (3)", func() {
+			for i := 0; i < trials; i++ {
+				CreateShares(1)
+
+				sharesSummed := vsharesSummed.Shares()
+				recon := Open(sharesSummed)
+				Expect(recon.Eq(&secretSummed)).To(BeTrue())
+
+				Expect(VsharesAreConsistent(vsharesSummed, k)).To(BeTrue())
+			}
+		})
+	})
+
 	// Tests for the Homomorphic scaling property (4). This property states
 	// that if we have a sharing and then scale it by some scalar (including
 	// the auxiliary information), we should get a new sharing that is valid
@@ -260,7 +371,7 @@ var _ = Describe("Verifiable secret sharing", func() {
 	//	should fail the validity check of the new auxiliary information.
 	//	3. The scaled shares should form a consistent sharing of the secret
 	//	that is defined as the product of the original secret and the scalar.
-	Context("Homomorphic scaling (4)", func() {
+	Context("Homomorphic scaling (5)", func() {
 		trials := 20
 		n := 20
 

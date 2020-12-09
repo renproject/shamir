@@ -52,6 +52,14 @@ func (s *Share) Add(a, b *Share) {
 	s.Value.Add(&a.Value, &b.Value)
 }
 
+// AddConstant computes the addition of the input share and the given constant
+// and stores the result in the caller. Addition is defined by adding the
+// constant to the share value but leaving the index unchanged.
+func (s *Share) AddConstant(other *Share, c *secp256k1.Fn) {
+	s.Index = other.Index
+	s.Value.Add(&other.Value, c)
+}
+
 // Scale multiplies the input share by a constant and then stores it in the
 // caller. This is defined as multiplying the share value by the scale, and
 // leaving the index unchanged.
