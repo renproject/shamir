@@ -95,6 +95,31 @@ var _ = Describe("Shamir Secret Sharing", func() {
 				Expect(SharesAreConsistent(sharesSummed, kmax)).To(BeTrue())
 			}
 		})
+
+		Specify("adding a constant to shares should result in a consistent sharing of the secrets plus the constant", func() {
+			indices := RandomIndices(n)
+			shares := make(Shares, n)
+			sharesSummed := make(Shares, n)
+
+			for i := 0; i < trials; i++ {
+				k := RandRange(1, n)
+				secret := secp256k1.RandomFn()
+				constant := secp256k1.RandomFn()
+				secretSummed.Add(&secret, &constant)
+
+				_ = ShareSecret(&shares, indices, secret, k)
+
+				// Construct the summed shares
+				for i := range sharesSummed {
+					sharesSummed[i].AddConstant(&shares[i], &constant)
+				}
+
+				recon := Open(sharesSummed)
+				Expect(recon.Eq(&secretSummed)).To(BeTrue())
+
+				Expect(SharesAreConsistent(sharesSummed, k)).To(BeTrue())
+			}
+		})
 	})
 
 	Context("Homomorphic under scaling (3)", func() {
