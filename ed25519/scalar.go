@@ -113,6 +113,12 @@ func (s *Scalar) Mul(a, b *Scalar) {
 	s.inner.Multiply(&a.inner, &b.inner)
 }
 
+// Clear sets the underlying data of the structure to zero. This will leave it
+// in a state which is a representation of the zero element.
+func (s *Scalar) Clear() {
+	s.inner = *edwards25519.NewScalar()
+}
+
 // Checks if the scalar is zero
 func (s *Scalar) IsZero() bool {
 	b := s.inner.Bytes()
