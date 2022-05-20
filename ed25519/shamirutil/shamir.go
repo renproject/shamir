@@ -22,7 +22,7 @@ func RandomIndices(n int) []ed25519.Scalar {
 func SequentialIndices(n int) []ed25519.Scalar {
 	indices := make([]ed25519.Scalar, n)
 	for i := range indices {
-		indices[i].SetU16(uint16(i) + 1)
+		indices[i].SetU32(uint32(i) + 1)
 	}
 
 	return indices

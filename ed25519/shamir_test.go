@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/renproject/shamir/ed25519"
 	. "github.com/renproject/shamir/ed25519/shamirutil"
+	"github.com/renproject/shamir/secp256k1/shamirutil"
 )
 
 //
@@ -45,7 +45,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			shares := make(Shares, n)
 
 			for i := 0; i < trials; i++ {
-				k = RandRange(1, n)
+				k = shamirutil.RandRange(1, n)
 				secret = RandomScalar()
 
 				err := ShareSecret(&shares, indices, secret, k)
@@ -73,9 +73,9 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			sharesSummed := make(Shares, n)
 
 			for i := 0; i < trials; i++ {
-				k1 = RandRange(1, n)
-				k2 = RandRange(1, n)
-				kmax = Max(k1, k2)
+				k1 = shamirutil.RandRange(1, n)
+				k2 = shamirutil.RandRange(1, n)
+				kmax = shamirutil.Max(k1, k2)
 				secret1 = RandomScalar()
 				secret2 = RandomScalar()
 				secretSummed.Add(&secret1, &secret2)
@@ -101,7 +101,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			sharesSummed := make(Shares, n)
 
 			for i := 0; i < trials; i++ {
-				k := RandRange(1, n)
+				k := shamirutil.RandRange(1, n)
 				secret := RandomScalar()
 				constant := RandomScalar()
 				secretSummed.Add(&secret, &constant)
@@ -136,7 +136,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 				sharesScaled := make(Shares, n)
 
 				for i := 0; i < trials; i++ {
-					k = RandRange(1, n)
+					k = shamirutil.RandRange(1, n)
 					secret = RandomScalar()
 					scale = RandomScalar()
 					secretScaled.Mul(&secret, &scale)
@@ -312,7 +312,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 			shares := make(Shares, n)
 
 			for i := 0; i < trials; i++ {
-				k := RandRange(n+1, maxK)
+				k := shamirutil.RandRange(n+1, maxK)
 				secret := RandomScalar()
 				err := ShareSecret(&shares, indices, secret, k)
 
@@ -322,7 +322,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 
 		It("should panic if the destination slice capacity is too small (2)", func() {
 			for i := 0; i < trials; i++ {
-				k := RandRange(1, n)
+				k := shamirutil.RandRange(1, n)
 				secret := RandomScalar()
 				shares := make(Shares, rand.Intn(n))
 				Expect(func() { ShareSecret(&shares, indices, secret, k) }).Should(Panic())
@@ -334,7 +334,7 @@ var _ = Describe("Shamir Secret Sharing", func() {
 
 			for i := 0; i < trials; i++ {
 				indices = RandomIndices(n)
-				k := RandRange(1, n)
+				k := shamirutil.RandRange(1, n)
 				secret := RandomScalar()
 				indices[rand.Intn(len(indices))].Clear()
 				Expect(func() { ShareSecret(&shares, indices, secret, k) }).Should(Panic())

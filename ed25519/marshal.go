@@ -64,6 +64,9 @@ func (shares *Shares) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 	}
 
 	if *shares == nil {
+		if uint32(rem/ShareSize) < l {
+			return buf, rem, surge.ErrUnexpectedEndOfBuffer
+		}
 		*shares = make(Shares, 0, l)
 	}
 

@@ -66,11 +66,6 @@ func (s *Share) Scale(other *Share, scale *Scalar) {
 	s.Value.Mul(&other.Value, scale)
 }
 
-// func main(){
-// 	var x *edwards25519.Scalar
-// 	x = edwards25519.NewScalar()
-// 	fmt.Println(x.Bytes())
-// }
 // ShareSecret creates Shamir shares for the given secret at the given
 // threshold, and stores them in the given destination slice. In the returned
 // Shares, there will be one share for each index in the indices that were used
@@ -130,14 +125,12 @@ func setRandomCoeffs(coeffs []Scalar, secret Scalar, k int) {
 
 	// NOTE: If k > len(coeffs), then this will panic when i > len(coeffs).
 	for i := 1; i < k; i++ {
-		coeffs[i] = RandomScalar() // to be written
+		coeffs[i] = RandomScalar()
 	}
 }
 
 // Evaluates the polynomial defined by the given coefficients at the point x
 // and stores the result in y. Modifies y, but leaves x and coeffs unchanged.
-// Normalizes y, so this this is not neccesary to do manually after calling
-// this function.
 //
 // Panics: This function assumes that len(coeffs) is at least 1 and not nil. If
 // it is not, it will panic. It does not make sense to call this function if
@@ -161,10 +154,10 @@ func polyEval(y, x *Scalar, coeffs []Scalar) {
 //		modified.
 func Open(shares Shares) Scalar {
 	var num, denom, res, tmp Scalar
-	res.SetU16(0)
+	res.SetU32(0)
 	for i := range shares {
-		num.SetU16(1)
-		denom.SetU16(1)
+		num.SetU32(1)
+		denom.SetU32(1)
 		for j := range shares {
 			if shares[i].Index.Eq(&shares[j].Index) {
 				continue

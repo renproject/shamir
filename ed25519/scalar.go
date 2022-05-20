@@ -53,7 +53,6 @@ func (s Scalar) PutB32(dst []byte) {
 		panic(fmt.Sprintf("invalid slice length: length needs to be at least 32, got %v", len(dst)))
 	}
 	// currently we store bytes in little endian format
-	// do we need to store it in big endian format
 	copy(dst, s.inner.Bytes())
 }
 
@@ -64,15 +63,15 @@ func (s Scalar) PutB32(dst []byte) {
 //
 // Panics: If the byte slice has length less than 32, this function will panic.
 
-// This function does not return any bool i.e. true if s is larger then prime order
-func (s *Scalar) SetB32(bs []byte) {
+func (s *Scalar) SetB32(bs []byte) error {
 	if len(bs) < 32 {
 		panic(fmt.Sprintf("invalid slice length: length needs to be at least 32, got %v", len(bs)))
 	}
 	_, err := s.inner.SetCanonicalBytes(bs)
 	if err != nil {
-		panic(fmt.Sprintf("Can't set the field element equal to the given byte slice. The size of byte slice: %v", len(bs)))
+		return fmt.Errorf("unable to set canonical bytes for scalar: %v", err)
 	}
+	return nil
 }
 
 // Get random scalar
@@ -81,7 +80,7 @@ func RandomScalar() Scalar {
 	var s Scalar
 	_, err := rand.Read(b[:])
 	if err != nil {
-		panic("Can't generate random scalar")
+		panic(fmt.Sprintf("error generating random bytes: %v", err))
 	}
 
 	s.inner.SetUniformBytes(b[:])
@@ -116,26 +115,30 @@ func (s *Scalar) Mul(a, b *Scalar) {
 // Clear sets the underlying data of the structure to zero. This will leave it
 // in a state which is a representation of the zero element.
 func (s *Scalar) Clear() {
-	s.inner = *edwards25519.NewScalar()
+	s.inner = edwards25519.Scalar{}
 }
 
 // Checks if the scalar is zero
 func (s *Scalar) IsZero() bool {
-	b := s.inner.Bytes()
-	for _, v := range b {
-		if v != 0 {
-			return false
-		}
-	}
-	return true
+	return s.inner == edwards25519.Scalar{}
 }
 
-// sets a uint16 value to a scalar
-func (s *Scalar) SetU16(i uint16) {
+// sets a uint32 value to a scalar
+func (s *Scalar) SetU32(i uint32) {
 	b := make([]byte, 32)
-	binary.LittleEndian.PutUint16(b, i)
+	binary.LittleEndian.PutUint32(b, i)
 	_, err := s.inner.SetCanonicalBytes(b)
 	if err != nil {
-		panic("Can't set uint16 value to ed25519 scalar")
+		panic(fmt.Sprintf("can't set uint32 value to ed25519 scalar: %v", err))
+	}
+}
+
+// sets a uint64 value to a scalar
+func (s *Scalar) SetU64(i uint64) {
+	b := make([]byte, 32)
+	binary.LittleEndian.PutUint64(b, i)
+	_, err := s.inner.SetCanonicalBytes(b)
+	if err != nil {
+		panic(fmt.Sprintf("can't set uint64 value to ed25519 scalar: %v", err))
 	}
 }
