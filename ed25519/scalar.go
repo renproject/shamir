@@ -129,7 +129,7 @@ func (s *Scalar) SetU32(i uint32) {
 	binary.LittleEndian.PutUint32(b, i)
 	_, err := s.inner.SetCanonicalBytes(b)
 	if err != nil {
-		panic(fmt.Sprintf("can't set uint32 value to ed25519 scalar: %v", err))
+		panic(fmt.Sprintf("cannot set uint32 value to ed25519 scalar: %v", err))
 	}
 }
 
@@ -139,6 +139,6 @@ func (s *Scalar) SetU64(i uint64) {
 	binary.LittleEndian.PutUint64(b, i)
 	_, err := s.inner.SetCanonicalBytes(b)
 	if err != nil {
-		panic(fmt.Sprintf("can't set uint64 value to ed25519 scalar: %v", err))
+		panic(fmt.Sprintf("cannot set uint64 value to ed25519 scalar: %v", err))
 	}
 }
