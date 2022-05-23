@@ -3,10 +3,11 @@ package ed25519
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"filippo.io/edwards25519"
 	"fmt"
-	"github.com/renproject/surge"
 	"unsafe"
+
+	"filippo.io/edwards25519"
+	"github.com/renproject/surge"
 )
 
 // extended Scalar
