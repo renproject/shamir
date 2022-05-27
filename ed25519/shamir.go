@@ -25,6 +25,19 @@ func (s *Share) Eq(other *Share) bool {
 	return s.Index.Eq(&other.Index) && s.Value.Eq(&other.Value)
 }
 
+// Eq returns true if the two shares array are equal, and false otherwise.
+func (s *Shares) Eq(other *Shares) bool {
+	if len(*s) != len(*other) {
+		return false
+	}
+	for i, _ := range *s {
+		if !(*s)[i].Eq(&(*other)[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // IndexEq returns true if the index of the two shares are equal, and false
 // otherwise.
 func (s *Share) IndexEq(other *Scalar) bool {

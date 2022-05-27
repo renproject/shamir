@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/renproject/shamir/ed25519/shamirutil"
 	"github.com/renproject/surge/surgeutil"
 
 	. "github.com/onsi/ginkgo"
@@ -27,7 +28,7 @@ var _ = Describe("Surge marshalling", func() {
 		Context(fmt.Sprintf("surge marshalling and unmarshalling for %v", t), func() {
 			It("should be the same after marshalling and unmarshalling", func() {
 				for i := 0; i < trials; i++ {
-					Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
+					Expect(shamirutil.MarshalUnmarshalCheck(t)).To(Succeed())
 				}
 			})
 

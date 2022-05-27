@@ -1,8 +1,13 @@
 package shamirutil
 
 import (
+	"fmt"
 	"github.com/renproject/shamir/ed25519"
+	"github.com/renproject/surge"
 	"math/rand"
+	"reflect"
+	"testing/quick"
+	"time"
 )
 
 // RandomIndices initialises and returns a slice of n indices, each of which is
@@ -101,4 +106,32 @@ func VsharesAreConsistent(
 	k int,
 ) bool {
 	return SharesAreConsistent(vshares.Shares(), k)
+}
+
+func MarshalUnmarshalCheck(t reflect.Type) error {
+	// Generate
+	x, ok := quick.Value(t, rand.New(rand.NewSource(time.Now().UnixNano())))
+	if !ok {
+		return fmt.Errorf("cannot generate value of type %v", t)
+	}
+	// Marshal
+	data, err := surge.ToBinary(x.Interface())
+	if err != nil {
+		return fmt.Errorf("cannot marshal: %v", err)
+	}
+	// Unmarshal
+	y := reflect.New(t)
+	if err := surge.FromBinary(y.Interface(), data); err != nil {
+		return fmt.Errorf("cannot unmarshal: %v", err)
+	}
+	// Equality
+	if !reflect.DeepEqual(x.Interface(), y.Elem().Interface()) {
+		arr := make([]reflect.Value, 1)
+		arr[0] = reflect.ValueOf(y)
+		v := reflect.ValueOf(x).MethodByName("Eq").Call(arr)
+		if !v[0].Bool() {
+			return fmt.Errorf("unequal")
+		}
+	}
+	return nil
 }

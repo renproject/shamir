@@ -76,7 +76,7 @@ func (p *Point) SetB32(bs []byte) error {
 func RandomPoint() Point {
 	var p Point
 	bs := RandomScalar()
-	p.inner.ScalarMult(&bs.inner, edwards25519.NewGeneratorPoint())
+	p.inner.ScalarBaseMult(&bs.inner)
 	return p
 }
 
