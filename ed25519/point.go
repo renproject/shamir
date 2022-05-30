@@ -21,12 +21,17 @@ const PointSize int = int(unsafe.Sizeof(Point{}))
 // SizeHint implements the surge.SizeHinter interface.
 func (p Point) SizeHint() int { return PointSizeMarshalled }
 
+// Clear sets the underlying data of the structure to zero. This will leave it
+// in a state which is a representation of the zero element.
+func (p Point) Clear() {
+	p.inner = edwards25519.Point{}
+}
+
 // Marshal implements the surge.Marshaler interface.
 func (p Point) Marshal(buf []byte, rem int) ([]byte, int, error) {
 	if len(buf) < PointSizeMarshalled || rem < 32 {
 		return buf, rem, surge.ErrUnexpectedEndOfBuffer
 	}
-
 	p.PutB32(buf[:PointSizeMarshalled])
 
 	return buf[PointSizeMarshalled:], rem - PointSizeMarshalled, nil
@@ -38,7 +43,7 @@ func (p *Point) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 		return buf, rem, surge.ErrUnexpectedEndOfBuffer
 	}
 
-	p.SetB32(buf[:PointSizeMarshalled])
+	(*p).SetB32(buf[:PointSizeMarshalled])
 
 	return buf[PointSizeMarshalled:], rem - PointSize, nil
 }
@@ -65,7 +70,7 @@ func (p *Point) SetB32(bs []byte) error {
 	if len(bs) < 32 {
 		panic(fmt.Sprintf("invalid slice length: length needs to be at least 32, got %v", len(bs)))
 	}
-	_, err := p.inner.SetBytes(bs)
+	_, err := (*p).inner.SetBytes(bs)
 	if err != nil {
 		return fmt.Errorf("unable to set canonical bytes for scalar: %v", err)
 	}
