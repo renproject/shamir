@@ -2,13 +2,14 @@ package ed25519_test
 
 import (
 	"fmt"
-	"reflect"
-
+	"github.com/renproject/shamir/ed25519/shamirutil"
 	"github.com/renproject/surge/surgeutil"
+	"reflect"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/renproject/shamir/ed25519"
+	. "github.com/renproject/shamir/secp256k1/shamirutil"
 )
 
 var _ = Describe("Surge marshalling", func() {
@@ -69,16 +70,18 @@ var _ = Describe("Surge marshalling", func() {
 					if t != reflect.TypeOf(Commitment{}) {
 						Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
 					} else {
-						var newpoint Point
-						point := RandomPoint()
-						rem := PointSize
-						dst := make([]byte, rem)
-						point.Marshal(dst[:], rem)
-						newpoint.Unmarshal(dst[:], rem)
+						commit := shamirutil.RandomCommitment(RandRange(10, 20))
 						ok := func() error {
-							flag := newpoint.Eq(&point)
-							if !flag {
-								return fmt.Errorf("unmarshalled point not equal to the initial point")
+							for _, point := range commit {
+								var newpoint Point
+								rem := PointSize
+								dst := make([]byte, rem)
+								point.Marshal(dst[:], rem)
+								newpoint.Unmarshal(dst[:], rem)
+								flag := newpoint.Eq(&point)
+								if !flag {
+									return fmt.Errorf("unmarshalled point not equal to the initial point")
+								}
 							}
 							return nil
 						}
