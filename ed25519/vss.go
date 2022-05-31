@@ -109,8 +109,7 @@ func (vs VerifiableShare) Marshal(buf []byte, rem int) ([]byte, int, error) {
 		return buf, rem, err
 	}
 
-	buf, rem, err = vs.Decommitment.Marshal(buf, rem)
-	return buf, rem, err
+	return vs.Decommitment.Marshal(buf, rem)
 }
 
 // Unmarshal implements the surge.Unmarshaler interface.

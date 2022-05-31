@@ -1,13 +1,8 @@
 package shamirutil
 
 import (
-	"fmt"
 	"github.com/renproject/shamir/ed25519"
-	"github.com/renproject/surge"
 	"math/rand"
-	"reflect"
-	"testing/quick"
-	"time"
 )
 
 // RandomIndices initialises and returns a slice of n indices, each of which is
@@ -106,53 +101,4 @@ func VsharesAreConsistent(
 	k int,
 ) bool {
 	return SharesAreConsistent(vshares.Shares(), k)
-}
-
-// marshals and unmarshals a shamir data structure for curve 25519.
-func MarshalUnmarshalCheck(t reflect.Type) error {
-	// Generate
-	x, ok := quick.Value(t, rand.New(rand.NewSource(time.Now().UnixNano())))
-	if !ok {
-		return fmt.Errorf("cannot generate value of type %v", t)
-	}
-	// Marshal
-	data, err := surge.ToBinary(x.Interface())
-	if err != nil {
-		return fmt.Errorf("cannot marshal: %v", err)
-	}
-	// Unmarshal
-	y := reflect.New(t)
-	if err := surge.FromBinary(y.Interface(), data); err != nil {
-		return fmt.Errorf("cannot unmarshal: %v", err)
-	}
-	// Equality
-	if !reflect.DeepEqual(x.Interface(), y.Elem().Interface()) {
-		ok := MarshalUnmarshalPointCheck()
-		if !ok {
-			return fmt.Errorf("unequal")
-		}
-	}
-	return nil
-}
-
-// marshals and unmarshals a point data structure. Since the ed25519
-// points are required to be encoded in a specific way, DeepEqual
-// fails as there could be 2 representations for a point in ed25519.
-// This needs to be equated using the equal function created for
-// ed25519 points.
-
-func MarshalUnmarshalPointCheck() bool {
-	var newpoint ed25519.Point
-	point := ed25519.RandomPoint()
-	rem := ed25519.PointSize
-	dst := make([]byte, rem)
-	_, _, err := point.Marshal(dst[:], rem)
-	if err != nil {
-		panic(fmt.Errorf("can not marshal ed25519 point : %v", err))
-	}
-	_, _, err = newpoint.Unmarshal(dst[:], rem)
-	if err != nil {
-		panic(fmt.Errorf("can not unmarshal canonical byte slice of ed25519 point : %v", err))
-	}
-	return newpoint.Eq(&point)
 }

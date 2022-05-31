@@ -43,13 +43,16 @@ func (p *Point) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 		return buf, rem, surge.ErrUnexpectedEndOfBuffer
 	}
 
-	(*p).SetB32(buf[:PointSizeMarshalled])
+	err := p.SetB32(buf[:PointSizeMarshalled])
+	if err != nil {
+		panic(fmt.Sprintf("can not unmarshal ed25519 point : %v", err))
+	}
 
 	return buf[PointSizeMarshalled:], rem - PointSize, nil
 }
 
-// PutB32 stores the bytes of the field element into destination in little endian
-// form.
+// PutB32 encodes the bytes of an ed25519 point into destination in little endian
+// form. The ending is 32 bytes long.
 //
 // Panics: If the byte slice has length less than 32, this function will panic.
 func (p Point) PutB32(dst []byte) {
@@ -65,12 +68,11 @@ func (p Point) PutB32(dst []byte) {
 // Errors: If the byte slice has length less than 32, this function
 // will panic. If the byte slice is not a canonical encoding,
 // this function will return an error.
-
 func (p *Point) SetB32(bs []byte) error {
 	if len(bs) < 32 {
 		panic(fmt.Sprintf("invalid slice length: length needs to be at least 32, got %v", len(bs)))
 	}
-	_, err := (*p).inner.SetBytes(bs)
+	_, err := p.inner.SetBytes(bs)
 	if err != nil {
 		return fmt.Errorf("unable to set canonical bytes for scalar: %v", err)
 	}
