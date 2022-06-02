@@ -218,7 +218,7 @@ func (c Commitment) Marshal(buf []byte, rem int) ([]byte, int, error) {
 	}
 
 	for i := range c {
-		buf, rem, err = c[i].Marshal(buf, rem)
+		buf, rem, err = c[i].Marshal(buf[:], rem)
 		if err != nil {
 			return buf, rem, err
 		}

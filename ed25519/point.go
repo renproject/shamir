@@ -45,14 +45,14 @@ func (p *Point) Unmarshal(buf []byte, rem int) ([]byte, int, error) {
 
 	err := p.SetB32(buf[:PointSizeMarshalled])
 	if err != nil {
-		panic(fmt.Sprintf("can not unmarshal ed25519 point : %v", err))
+		return buf, rem, fmt.Errorf("can not unmarshal ed25519 point : %v", err)
 	}
 
 	return buf[PointSizeMarshalled:], rem - PointSize, nil
 }
 
 // PutB32 encodes the bytes of an ed25519 point into destination in little endian
-// form. The ending is 32 bytes long.
+// form. The encoding is 32 bytes long.
 //
 // Panics: If the byte slice has length less than 32, this function will panic.
 func (p Point) PutB32(dst []byte) {

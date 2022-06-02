@@ -63,32 +63,45 @@ var _ = Describe("Surge marshalling", func() {
 	}
 	for _, t := range types {
 		t := t
-
-		Context(fmt.Sprintf("surge marshalling and unmarshalling equality check for %v", t), func() {
-			It("should be the same after marshalling and unmarshalling", func() {
-				for i := 0; i < trials; i++ {
-					if t != reflect.TypeOf(Commitment{}) {
+		if t != reflect.TypeOf(Commitment{}) {
+			Context(fmt.Sprintf("surge marshalling and unmarshalling for %v", t), func() {
+				It("should be the same after marshalling and unmarshalling", func() {
+					for i := 0; i < trials; i++ {
 						Expect(surgeutil.MarshalUnmarshalCheck(t)).To(Succeed())
-					} else {
-						commit := shamirutil.RandomCommitment(RandRange(10, 20))
-						ok := func() error {
-							for _, point := range commit {
-								var newpoint Point
-								rem := PointSize
-								dst := make([]byte, rem)
-								point.Marshal(dst[:], rem)
-								newpoint.Unmarshal(dst[:], rem)
-								flag := newpoint.Eq(&point)
-								if !flag {
-									return fmt.Errorf("unmarshalled point not equal to the initial point")
-								}
-							}
-							return nil
-						}
-						Expect(ok()).To(Succeed())
 					}
-				}
+				})
 			})
-		})
+		}
 	}
+	Context("surge marshalling and unmarshalling for Commitment{}", func() {
+		It("should be the same after marshalling and unmarshalling", func() {
+			for i := 0; i < trials; i++ {
+				commit := shamirutil.RandomCommitment(RandRange(10, 20))
+				newcommit := make(Commitment, len(commit))
+				rem := 4 + PointSizeMarshalled*len(commit)
+				dst := make([]byte, rem)
+				_, _, err := commit.Marshal(dst, rem)
+				Expect(err).ToNot(HaveOccurred())
+				rem = 4 + PointSize*len(commit)
+				_, _, err = newcommit.Unmarshal(dst, rem)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(newcommit.Eq(commit)).To(BeTrue())
+			}
+		})
+	})
+	Context("surge marshalling and unmarshalling for ed25519 Point{}", func() {
+		It("should be the same after marshalling and unmarshalling", func() {
+			for i := 0; i < trials; i++ {
+				var newpoint Point
+				point := RandomPoint()
+				rem := PointSize
+				dst := make([]byte, rem)
+				_, _, err := point.Marshal(dst, rem)
+				Expect(err).ToNot(HaveOccurred())
+				_, _, err = newpoint.Unmarshal(dst[:], rem)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(newpoint.Eq(&point)).To(BeTrue())
+			}
+		})
+	})
 })
