@@ -67,3 +67,38 @@ func SharesAreConsistent(shares ed25519.Shares, k int) bool {
 
 	return true
 }
+
+// RandomCommitment constructs and returns a random commitment with the given
+// number of curve points.
+func RandomCommitment(k int) ed25519.Commitment {
+	c := make(ed25519.Commitment, k)
+	for i := range c {
+		c[i] = ed25519.RandomPoint()
+	}
+	return c
+}
+
+// PerturbIndex modifies the given verifiable share to have a random index.
+func PerturbIndex(vs *ed25519.VerifiableShare) {
+	vs.Share.Index = ed25519.RandomScalar()
+}
+
+// PerturbValue modifies the given verifiable share to have a random value.
+func PerturbValue(vs *ed25519.VerifiableShare) {
+	vs.Share.Value = ed25519.RandomScalar()
+}
+
+// PerturbDecommitment modifies the given verifiable share to have a random
+// decommitment value.
+func PerturbDecommitment(vs *ed25519.VerifiableShare) {
+	vs.Decommitment = ed25519.RandomScalar()
+}
+
+// VsharesAreConsistent is a wrapper around SharesAreConsistent for the
+// VerifiableShares type.
+func VsharesAreConsistent(
+	vshares ed25519.VerifiableShares,
+	k int,
+) bool {
+	return SharesAreConsistent(vshares.Shares(), k)
+}
