@@ -4,7 +4,6 @@ import (
 	"math/rand"
 	"reflect"
 
-	//"github.com/renproject/shamir/ed25519point"
 	"github.com/renproject/surge"
 )
 
